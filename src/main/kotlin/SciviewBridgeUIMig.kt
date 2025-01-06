@@ -29,8 +29,9 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
     lateinit var lockGroupHandler: GroupLocksHandling
     lateinit var linkColorSelector: JComboBox<String>
     lateinit var volumeColorSelector: JComboBox<String>
-    lateinit var startEyeTracking: JButton
-    lateinit var stopEyeTracking: JButton
+    lateinit var startVR: JButton
+    lateinit var stopVR: JButton
+    lateinit var eyeTrackingToggle: JCheckBox
 
     private fun populatePane() {
         val bridge = this.controlledBridge ?: throw IllegalStateException("The passed bridge cannot be null.")
@@ -152,11 +153,14 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
         windowPanel.add(visButtons, "span, growx")
 
         // Eye Tracking
-        startEyeTracking = JButton("Start Eye Tracking").apply { addActionListener { bridge.launchEyeTracking() } }
-        stopEyeTracking = JButton("Stop Eye Tracking").apply { addActionListener { bridge.stopEyeTracking() } }
+        startVR = JButton("Start VR").apply { addActionListener { bridge.launchVR() } }
+        stopVR = JButton("Stop VR").apply { addActionListener { bridge.stopVR() } }
+        eyeTrackingToggle = JCheckBox("Launch with Eye Tracking")
+        eyeTrackingToggle.setSelected(true)
         windowPanel.add(JPanel(MigLayout("fillx, insets 0")).apply {
-            add(startEyeTracking, "growx")
-            add(stopEyeTracking, "growx")
+            add(startVR, "growx")
+            add(stopVR, "growx")
+            add(eyeTrackingToggle)
         }, "span, growx")
 
         // Close Button

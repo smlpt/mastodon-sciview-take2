@@ -248,9 +248,9 @@ class SciviewBridgeUI(controlledBridge: SciviewBridge, populateThisContainer: Co
         c.gridy++
 
         startEyeTracking = JButton("Start Eye Tracking")
-        startEyeTracking.addActionListener { bridge.launchEyeTracking() }
+        startEyeTracking.addActionListener { bridge.launchVR() }
         stopEyeTracking = JButton("Stop Eye Tracking")
-        stopEyeTracking.addActionListener { bridge.stopEyeTracking() }
+        stopEyeTracking.addActionListener { bridge.stopVR() }
 
         val trackingBtnPlaceholder = JPanel()
         controlsWindowPanel.add(trackingBtnPlaceholder, c)

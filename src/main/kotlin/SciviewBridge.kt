@@ -36,6 +36,7 @@ import org.scijava.event.EventService
 import org.scijava.ui.behaviour.ClickBehaviour
 import org.scijava.ui.behaviour.DragBehaviour
 import sc.iview.SciView
+import sc.iview.commands.demo.advanced.CellTrackingBase
 import sc.iview.commands.demo.advanced.EyeTracking
 import sc.iview.commands.demo.advanced.TimepointObserver
 import util.SphereLinkNodes
@@ -100,7 +101,7 @@ class SciviewBridge: TimepointObserver {
     var associatedUI: SciviewBridgeUIMig? = null
     var uiFrame: JFrame? = null
 
-    lateinit var eyeTracking: EyeTracking
+    lateinit var VRTracking: CellTrackingBase
 
     constructor(
         mastodonMainWindow: ProjectModel,
@@ -607,30 +608,41 @@ class SciviewBridge: TimepointObserver {
         }
     }
 
-    fun launchEyeTracking() {
+    fun launchVR() {
         thread {
-            eyeTracking = EyeTracking(sciviewWin)
+            if (associatedUI!!.eyeTrackingToggle.isSelected) {
+                VRTracking = EyeTracking(sciviewWin)
+                (VRTracking as EyeTracking).run()
+            } else {
+                VRTracking = CellTrackingBase(sciviewWin)
+                VRTracking.run()
+            }
+
             // Pass track and spot handling callbacks to sciview
-            eyeTracking.finalTrackCallback = {
+            VRTracking.finalTrackCallback = {
                 logger.info("called mastodonUpdateGraph")
                 updateSciviewContent(bdvWinParamsProvider!!)
                 sphereLinkNodes.showInstancedLinks(sphereLinkNodes.currentColorMode, bdvWinParamsProvider!!.colorizer)
             }
-            eyeTracking.trackCreationCallback = sphereLinkNodes.addTrackToMastodon
-            eyeTracking.spotCreationCallback = sphereLinkNodes.addSpotToMastodon
-            eyeTracking.spotSelectionCallback = sphereLinkNodes.selectClosestSpotVR
+            VRTracking.trackCreationCallback = sphereLinkNodes.addTrackToMastodon
+            VRTracking.spotCreationCallback = sphereLinkNodes.addSpotToMastodon
+            VRTracking.spotSelectionCallback = sphereLinkNodes.selectClosestSpotVR
 
             // register the bridge as an observer to the timepoint changes by the user in VR,
             // allowing us to get updates via the onTimepointUpdated() function
-            eyeTracking.registerObserver(this)
-            eyeTracking.run()
+            VRTracking.registerObserver(this)
         }
     }
 
-    fun stopEyeTracking() {
-        eyeTracking.unregisterObserver(this)
+    fun stopVR() {
+        VRTracking.unregisterObserver(this)
         logger.info("Removed timepoint observer from VR bindings.")
-        eyeTracking.stop()
+        if (associatedUI!!.eyeTrackingToggle.isSelected) {
+            (VRTracking as EyeTracking).stop()
+        } else {
+            VRTracking.stop()
+        }
+
         // ensure that the volume is visible again (could be turned invisible during the calibration)
         volumeNode.visible = true
         sciviewWin.centerOnNode(axesParent)
