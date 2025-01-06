@@ -8,6 +8,7 @@ import graphics.scenery.primitives.Arrow
 import graphics.scenery.primitives.Cylinder
 import graphics.scenery.utils.extensions.*
 import graphics.scenery.utils.lazyLogger
+import net.imglib2.RealLocalizable
 import net.imglib2.display.ColorTable
 import org.apache.commons.math3.linear.Array2DRowRealMatrix
 import org.apache.commons.math3.linear.EigenDecomposition
@@ -26,6 +27,7 @@ import org.mastodon.ui.coloring.GraphColorGenerator
 import org.scijava.event.EventService
 import sc.iview.SciView
 import sc.iview.commands.demo.advanced.HedgehogAnalysis.SpineGraphVertex
+import spim.fiji.spimdata.interestpoints.InterestPoint
 import java.awt.Color
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -347,7 +349,8 @@ class SphereLinkNodes(
         }
     }
 
-    fun selectSpot(instance: InstancedNode.Instance) {
+    /** Select a spot in Mastodon by passing its [instance] from the sciview side. */
+    fun selectSpot2D(instance: InstancedNode.Instance) {
         // if one accidentally clicks a link instance and triggers this function, don't continue
         val selectedSpot = findSpotFromInstance(instance)
         selectedSpot?.let {
@@ -357,6 +360,19 @@ class SphereLinkNodes(
             mastodonData.highlightModel.highlightVertex(it)
             mastodonData.selectionModel.setSelected(it, true)
         }
+    }
+
+    val selectClosestSpotVR: ((Vector3f, Int) -> Unit) = { pos, tp ->
+        val spatialIndex = mastodonData.model.spatioTemporalIndex.getSpatialIndex(tp)
+        val mastodonPos = bridge.sciviewToMastodonCoords(pos)
+        val spotSearch = spatialIndex.nearestNeighborSearch
+        val p = InterestPoint(0, mastodonPos.toDoubleArray())
+        spotSearch.search(p)
+        val spot = spotSearch.sampler.get()
+        clearSpotSelection()
+        mastodonData.focusModel.focusVertex(spot)
+        mastodonData.highlightModel.highlightVertex(spot)
+        mastodonData.selectionModel.setSelected(spot, true)
     }
 
     fun clearSpotSelection() {

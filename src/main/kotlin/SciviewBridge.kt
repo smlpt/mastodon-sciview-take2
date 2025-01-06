@@ -524,7 +524,7 @@ class SciviewBridge: TimepointObserver {
                     if (selectedSpotInstance != null) {
                         logger.debug("selected instance {}", selectedSpotInstance)
                         selectedSpotInstance?.let { s ->
-                            sphereLinkNodes.selectSpot(s)
+                            sphereLinkNodes.selectSpot2D(s)
                             sphereLinkNodes.showInstancedSpots(
                                 detachedDPP_showsLastTimepoint.timepoint,
                                 detachedDPP_showsLastTimepoint.colorizer
@@ -609,19 +609,17 @@ class SciviewBridge: TimepointObserver {
 
     fun launchEyeTracking() {
         thread {
-            eyeTracking = EyeTracking(
-                // linkCreationCallback:
-                sphereLinkNodes.addTrackToMastodon,
-                // finalTrackCallback:
-                {
-                    logger.info("called mastodonUpdateGraph")
-                    updateSciviewContent(bdvWinParamsProvider!!)
-                    sphereLinkNodes.showInstancedLinks(sphereLinkNodes.currentColorMode, bdvWinParamsProvider!!.colorizer)
-                },
-                // spotCreationCallback:
-                sphereLinkNodes.addSpotToMastodon,
-                sciviewWin
-            )
+            eyeTracking = EyeTracking(sciviewWin)
+            // Pass track and spot handling callbacks to sciview
+            eyeTracking.finalTrackCallback = {
+                logger.info("called mastodonUpdateGraph")
+                updateSciviewContent(bdvWinParamsProvider!!)
+                sphereLinkNodes.showInstancedLinks(sphereLinkNodes.currentColorMode, bdvWinParamsProvider!!.colorizer)
+            }
+            eyeTracking.trackCreationCallback = sphereLinkNodes.addTrackToMastodon
+            eyeTracking.spotCreationCallback = sphereLinkNodes.addSpotToMastodon
+            eyeTracking.spotSelectionCallback = sphereLinkNodes.selectClosestSpotVR
+
             // register the bridge as an observer to the timepoint changes by the user in VR,
             // allowing us to get updates via the onTimepointUpdated() function
             eyeTracking.registerObserver(this)
