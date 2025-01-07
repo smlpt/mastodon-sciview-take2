@@ -100,6 +100,7 @@ class SciviewBridge: TimepointObserver {
     var moveSpotInSciview: (Spot?) -> Unit?
     var associatedUI: SciviewBridgeUIMig? = null
     var uiFrame: JFrame? = null
+    var isVRactive = false
 
     lateinit var VRTracking: CellTrackingBase
 
@@ -452,6 +453,10 @@ class SciviewBridge: TimepointObserver {
     }
 
     private fun updateSciviewCamera(forThisBdv: MamutViewBdv) {
+        // Let's not move the camera around when the user is in VR
+        if (isVRactive) {
+            return
+        }
         val auxTransform = AffineTransform3D()
         val viewMatrix = Matrix4f()
         val viewRotation = Quaternionf()
@@ -614,6 +619,7 @@ class SciviewBridge: TimepointObserver {
     }
 
     fun launchVR() {
+        isVRactive = true
         thread {
             if (associatedUI!!.eyeTrackingToggle.isSelected) {
                 VRTracking = EyeTracking(sciviewWin)
@@ -640,6 +646,7 @@ class SciviewBridge: TimepointObserver {
     }
 
     fun stopVR() {
+        isVRactive = false
         VRTracking.unregisterObserver(this)
         logger.info("Removed timepoint observer from VR bindings.")
         if (associatedUI!!.eyeTrackingToggle.isSelected) {
