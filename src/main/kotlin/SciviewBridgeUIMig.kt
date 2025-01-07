@@ -98,7 +98,7 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
             SpinnerNumberModel(bridge.mastodon.maxTimepoint, 0, bridge.mastodon.maxTimepoint, 1)
         ) { value ->
             bridge.sphereLinkNodes.linkBackwardRange = value.toInt()
-            bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastTpWhenVolumeWasUpdated)
+            bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastUpdatedSciviewTP)
         }
 
         linkRangeForwards = addLabeledSpinner(
@@ -106,7 +106,7 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
             SpinnerNumberModel(bridge.mastodon.maxTimepoint, 0, bridge.mastodon.maxTimepoint, 1)
         ) { value ->
             bridge.sphereLinkNodes.linkForwardRange = value.toInt()
-            bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastTpWhenVolumeWasUpdated)
+            bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastUpdatedSciviewTP)
         }
 
         // Adding dropdowns for link LUTs and volume colors
@@ -160,7 +160,7 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
         windowPanel.add(JPanel(MigLayout("fillx, insets 0")).apply {
             add(startVR, "growx")
             add(stopVR, "growx")
-            add(eyeTrackingToggle)
+            add(eyeTrackingToggle, "dock east, gapleft 8px")
         }, "span, growx")
 
         // Close Button

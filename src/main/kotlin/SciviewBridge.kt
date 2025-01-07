@@ -275,11 +275,11 @@ class SciviewBridge: TimepointObserver {
             //TODO: change MIN and MAX to proper values
             logger.debug("Clamp at ${intensity.clampTop}," +
                     " range min to ${intensity.rangeMin} and range max to ${intensity.rangeMax}")
-            updateVolumeTP(force = true)
+            updateSciviewTPfromBDV(force = true)
             updateUI()
         } else {
             intensity = intensityBackup.copy()
-            updateVolumeTP(force = true)
+            updateSciviewTPfromBDV(force = true)
             updateUI()
         }
     }
@@ -382,16 +382,17 @@ class SciviewBridge: TimepointObserver {
         val colorizer: GraphColorGenerator<Spot, Link>
     }
 
-    internal inner class DPP_BdvAdapter(val ofThisBdv: MamutViewBdv) : DisplayParamsProvider {
+    internal inner class DPP_BdvAdapter(ofThisBdv: MamutViewBdv) : DisplayParamsProvider {
+        val bdv: MamutViewBdv = ofThisBdv
         override val timepoint: Int
-            get() = ofThisBdv.viewerPanelMamut.state().currentTimepoint
+            get() = bdv.viewerPanelMamut.state().currentTimepoint
         override val colorizer: GraphColorGenerator<Spot, Link>
-            get() = getCurrentColorizer(ofThisBdv)
+            get() = getCurrentColorizer(bdv)
     }
 
     internal inner class DPP_Detached : DisplayParamsProvider {
         override val timepoint: Int
-            get() = lastTpWhenVolumeWasUpdated
+            get() = lastUpdatedSciviewTP
         override val colorizer: GraphColorGenerator<Spot, Link>
             get() = recentColorizer ?: noTSColorizer
     }
@@ -415,21 +416,25 @@ class SciviewBridge: TimepointObserver {
             get() = recentColorizer ?: noTSColorizer
     }
 
-    /** Calls [updateVolumeTP] and [SphereLinkNodes.showInstancedSpots] to update the current volume and corresponding spots. */
+    /** Calls [updateSciviewTPfromBDV] and [SphereLinkNodes.showInstancedSpots] to update the current volume and corresponding spots. */
     fun updateSciviewContent(forThisBdv: DisplayParamsProvider) {
-        updateVolumeTP(forThisBdv)
+        updateSciviewTPfromBDV(forThisBdv)
         sphereLinkNodes.showInstancedSpots(forThisBdv.timepoint, forThisBdv.colorizer)
         sphereLinkNodes.updateLinkVisibility(forThisBdv.timepoint)
         sphereLinkNodes.updateLinkColors(forThisBdv.colorizer)
     }
 
-    var lastTpWhenVolumeWasUpdated = 0
+    fun updateBDV_TPfromSciview(tp: Int) {
+        (bdvWinParamsProvider as DPP_BdvAdapter).bdv.viewerPanelMamut.state().currentTimepoint = tp
+    }
+
+    var lastUpdatedSciviewTP = 0
     val detachedDPP_showsLastTimepoint: DisplayParamsProvider = DPP_Detached()
 
     /** Fetch the volume state at the current time point,
      * then call [volumeIntensityProcessing] to adjust the intensity values */
     @JvmOverloads
-    fun updateVolumeTP(
+    fun updateSciviewTPfromBDV(
         forThisBdv: DisplayParamsProvider = detachedDPP_showsLastTimepoint,
         force: Boolean = false
     ) {
@@ -437,8 +442,8 @@ class SciviewBridge: TimepointObserver {
         if (updateVolAutomatically || force) {
             val currTP = forThisBdv.timepoint
 
-            if (currTP != lastTpWhenVolumeWasUpdated) {
-                lastTpWhenVolumeWasUpdated = currTP
+            if (currTP != lastUpdatedSciviewTP) {
+                lastUpdatedSciviewTP = currTP
 
                 val tp = forThisBdv.timepoint
                 volumeNode.goToTimepoint(tp)
@@ -653,6 +658,7 @@ class SciviewBridge: TimepointObserver {
     /** Implementation of the [TimepointObserver] interface; this method is called whenever the VR user triggers
      *  a timepoint change or plays the animation */
     override fun onTimePointChanged(timepoint: Int) {
+        updateBDV_TPfromSciview(timepoint)
         showTimepoint(timepoint)
     }
 
