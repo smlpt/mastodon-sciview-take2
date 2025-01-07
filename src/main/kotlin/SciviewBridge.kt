@@ -103,6 +103,11 @@ class SciviewBridge: TimepointObserver {
     var isVRactive = false
 
     lateinit var VRTracking: CellTrackingBase
+    var currentControllerPos = Vector3f()
+    private var adjacentEdges: MutableList<Link> = ArrayList()
+    private var moveInstanceVRInit: (Vector3f) -> Unit
+    private var moveInstanceVRDrag: (Vector3f) -> Unit
+    private var moveInstanceVREnd: (Vector3f) -> Unit
 
     constructor(
         mastodonMainWindow: ProjectModel,
@@ -193,6 +198,39 @@ class SciviewBridge: TimepointObserver {
             spot?.let {
                 selectedSpotInstance = sphereLinkNodes.findInstanceFromSpot(spot)
                 sphereLinkNodes.moveAndScaleSpotInSciview(spot) }
+        }
+
+        moveInstanceVRInit = {
+            logger.info("started VR instance movement")
+            bdvNotifier.lockVertexUpdates = true
+            currentControllerPos = sciviewToMastodonCoords(VRTracking.getTipPosition())
+            selectedSpotInstance?.let {
+                val spot = sphereLinkNodes.findSpotFromInstance(selectedSpotInstance!!)
+                mastodon.model.graph.vertexRef().refTo(spot).incomingEdges().forEach {
+                    adjacentEdges.add(it)
+                }
+                mastodon.model.graph.vertexRef().refTo(spot).outgoingEdges().forEach {
+                    adjacentEdges.add(it)
+                }
+            }
+        }
+
+        moveInstanceVRDrag = {
+            logger.info("dragging in VR...")
+            selectedSpotInstance?.let {
+                val newPos = sciviewToMastodonCoords(VRTracking.getTipPosition())
+                val movement = newPos - currentControllerPos
+                selectedSpotInstance?.spatialOrNull()?.position = newPos
+                currentControllerPos = newPos
+                sphereLinkNodes.moveSpotInBDV(it, movement)
+                sphereLinkNodes.updateLinkTransforms(adjacentEdges)
+            }
+        }
+
+        moveInstanceVREnd = {
+            bdvNotifier.lockVertexUpdates = false
+            sphereLinkNodes.showInstancedSpots(detachedDPP_showsLastTimepoint.timepoint,
+                detachedDPP_showsLastTimepoint.colorizer)
         }
 
         registerKeyboardHandlers()
@@ -553,14 +591,14 @@ class SciviewBridge: TimepointObserver {
             handler.addBehaviour("Click Instance", clickInstance)
             handler.addKeyBinding("Click Instance", "button1")
 
-            handler.addBehaviour("Move Instance", MoveInstance(
+            handler.addBehaviour("Move Instance", MoveInstanceByMouse(
                 { scene.findObserver() } ))
             handler.addKeyBinding("Move Instance", "SPACE")
         }
 
     }
 
-    inner class MoveInstance(
+    inner class MoveInstanceByMouse(
         camera: () -> Camera?
     ): DragBehaviour, WithCameraDelegateBase(camera) {
 
@@ -638,6 +676,9 @@ class SciviewBridge: TimepointObserver {
             VRTracking.trackCreationCallback = sphereLinkNodes.addTrackToMastodon
             VRTracking.spotCreationCallback = sphereLinkNodes.addSpotToMastodon
             VRTracking.spotSelectionCallback = sphereLinkNodes.selectClosestSpotVR
+            VRTracking.spotMoveInitCallback = moveInstanceVRInit
+            VRTracking.spotMoveDragCallback = moveInstanceVRDrag
+            VRTracking.spotMoveEndCallback = moveInstanceVREnd
 
             // register the bridge as an observer to the timepoint changes by the user in VR,
             // allowing us to get updates via the onTimepointUpdated() function
