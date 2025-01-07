@@ -155,7 +155,7 @@ class SciviewBridgeUI(controlledBridge: SciviewBridge, populateThisContainer: Co
             linkRangeBackwards,
             {
                 f: Float -> bridge.sphereLinkNodes.linkBackwardRange = f.toInt()
-                bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastTpWhenVolumeWasUpdated)
+                bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastUpdatedSciviewTP)
             },
             c)
 
@@ -168,7 +168,7 @@ class SciviewBridgeUI(controlledBridge: SciviewBridge, populateThisContainer: Co
             linkRangeForwards,
             {
                 f: Float -> bridge.sphereLinkNodes.linkForwardRange = f.toInt()
-                bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastTpWhenVolumeWasUpdated)
+                bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastUpdatedSciviewTP)
             },
             c
         )
@@ -361,7 +361,7 @@ class SciviewBridgeUI(controlledBridge: SciviewBridge, populateThisContainer: Co
             val bridge = this@SciviewBridgeUI.controlledBridge ?: throw IllegalStateException("Bridge is null.")
             val s = changeEvent.source as SpinnerNumberModel
             pushChangeToHere.accept(s.number.toFloat())
-            if (bridge.updateVolAutomatically) bridge.updateVolumeTP()
+            if (bridge.updateVolAutomatically) bridge.updateSciviewTPfromBDV()
         }
     }
 
