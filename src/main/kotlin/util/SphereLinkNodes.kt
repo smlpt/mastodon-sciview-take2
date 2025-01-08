@@ -373,7 +373,8 @@ class SphereLinkNodes(
         clearSpotSelection()
         val spotPos = FloatArray(3)
         spot.localize(spotPos)
-        if (Vector3f(spotPos).distance(mastodonPos) < sphereScaleFactor) {
+        logger.debug("distance to closest point: ${Vector3f(spotPos).distance(mastodonPos)}")
+        if (Vector3f(spotPos).distance(mastodonPos) < sphereScaleFactor * 10) {
             mastodonData.focusModel.focusVertex(spot)
             mastodonData.highlightModel.highlightVertex(spot)
             mastodonData.selectionModel.setSelected(spot, true)
