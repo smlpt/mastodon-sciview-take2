@@ -8,7 +8,6 @@ import graphics.scenery.primitives.Arrow
 import graphics.scenery.primitives.Cylinder
 import graphics.scenery.utils.extensions.*
 import graphics.scenery.utils.lazyLogger
-import net.imglib2.RealLocalizable
 import net.imglib2.display.ColorTable
 import org.apache.commons.math3.linear.Array2DRowRealMatrix
 import org.apache.commons.math3.linear.EigenDecomposition
@@ -44,7 +43,7 @@ class SphereLinkNodes(
 ) {
 
     private val logger by lazyLogger()
-    var sphereScaleFactor = 5f
+    var sphereScaleFactor = 1f
     var linkScaleFactor = 1f
     var DEFAULT_COLOR = 0x00FFFFFF
     var numTimePoints: Int
@@ -55,7 +54,7 @@ class SphereLinkNodes(
     private var spotRef: Spot? = null
     var events: EventService? = null
 
-    val sphere = Icosphere(1f, 2)
+    val sphere = Icosphere(2f, 2)
     val cylinder = Cylinder(0.2f, 1f, 6, true, true)
     var mainSpotInstance: InstancedNode? = null
     var mainLinkInstance: InstancedNode? = null
@@ -362,6 +361,8 @@ class SphereLinkNodes(
         }
     }
 
+    /** Lambda that performs nearest neighbor search in the current timepoint,
+     * based on a position given by the VR controller. */
     val selectClosestSpotVR: ((Vector3f, Int) -> Unit) = { pos, tp ->
         val spatialIndex = mastodonData.model.spatioTemporalIndex.getSpatialIndex(tp)
         val mastodonPos = bridge.sciviewToMastodonCoords(pos)
@@ -370,10 +371,14 @@ class SphereLinkNodes(
         spotSearch.search(p)
         val spot = spotSearch.sampler.get()
         clearSpotSelection()
-        mastodonData.focusModel.focusVertex(spot)
-        mastodonData.highlightModel.highlightVertex(spot)
-        mastodonData.selectionModel.setSelected(spot, true)
-        bridge.selectedSpotInstance = findInstanceFromSpot(spot)
+        val spotPos = FloatArray(3)
+        spot.localize(spotPos)
+        if (Vector3f(spotPos).distance(mastodonPos) < sphereScaleFactor) {
+            mastodonData.focusModel.focusVertex(spot)
+            mastodonData.highlightModel.highlightVertex(spot)
+            mastodonData.selectionModel.setSelected(spot, true)
+            bridge.selectedSpotInstance = findInstanceFromSpot(spot)
+        }
     }
 
     fun clearSpotSelection() {
@@ -398,7 +403,7 @@ class SphereLinkNodes(
         spot.localize(spotPosition)
         selectedInstance?.spatial {
             position = Vector3f(spotPosition)
-            scale = Vector3f(sphereScaleFactor *  sqrt(spot.boundingSphereRadiusSquared.toFloat()) / 50f)
+            scale = Vector3f(sphereScaleFactor *  sqrt(spot.boundingSphereRadiusSquared.toFloat()) / 10f)
         }
         val edges = spot.incomingEdges() + spot.outgoingEdges()
         for (edge in edges) {
@@ -408,10 +413,19 @@ class SphereLinkNodes(
         }
     }
 
-    /** Called when a spot is scaled in the sciview window.
-     * This function then scales both the instance and the vertex on the BDV side.
+    /** Takes a single instance, looks for the corresponding spot in the current timepoint,
+     * and updates the instance's scale based on the current [sphereScaleFactor] and the spot's radius.
+     * This does not change the actual radius of the spot, it just changes its apparent scale in sciview. */
+    private fun adjustSpotInstanceScale(inst: InstancedNode.Instance) {
+        findSpotFromInstance(inst)?.let { spot ->
+            inst.spatial().scale = Vector3f(sphereScaleFactor *  sqrt(spot.boundingSphereRadiusSquared.toFloat()) / 10f)
+        }
+    }
+
+    /** Called when a spot's radius is changed in the sciview window. This changes both the actual spot radius in BDV
+     * and its apparent scale in sciview.
      * Setting the [direction] to true means to scale up, false means scale down. */
-    fun scaleSpotAndInstance(instance: InstancedNode.Instance?, direction: Boolean) {
+    fun changeSpotRadius(instance: InstancedNode.Instance?, direction: Boolean) {
         val factor = if (direction) 1.1 else 0.9
         instance?.let {
             val spot = findSpotFromInstance(it)
@@ -457,21 +471,26 @@ class SphereLinkNodes(
         return Vector4f(r, g, b, 1.0f)
     }
 
+    fun updateSphereScales() {
+        val tStart = TimeSource.Monotonic.markNow()
+        mainSpotInstance?.instances?.forEach { s ->
+            adjustSpotInstanceScale(s)
+        }
+        val tElapsed = TimeSource.Monotonic.markNow() - tStart
+        logger.debug("Updating spot scale to $sphereScaleFactor, took $tElapsed")
+    }
+
     fun decreaseSphereScale() {
-        val oldScale = sphereScaleFactor
         sphereScaleFactor -= 0.1f
         if (sphereScaleFactor < 0.1f) sphereScaleFactor = 0.1f
-        val factor = sphereScaleFactor / oldScale
-        mainSpotInstance?.instances?.forEach { s -> s.spatial().scale *= Vector3f(factor) }
-        logger.debug("Decreasing scale to $sphereScaleFactor, by factor $factor")
+        updateSphereScales()
+        bridge.associatedUI?.updatePaneValues()
     }
 
     fun increaseSphereScale() {
-        val oldScale = sphereScaleFactor
         sphereScaleFactor += 0.1f
-        val factor = sphereScaleFactor / oldScale
-        mainSpotInstance?.instances?.forEach { s -> s.spatial().scale *= Vector3f(factor) }
-        logger.debug("Increasing scale to $sphereScaleFactor, by factor $factor")
+        updateSphereScales()
+        bridge.associatedUI?.updatePaneValues()
     }
 
     fun increaseLinkScale() {
@@ -533,7 +552,6 @@ class SphereLinkNodes(
         // TODO use coroutines for this
         logger.info("iterating over ${mastodonData.model.graph.edges().size} mastodon edges...")
         mastodonData.model.graph.edges().forEach { edge ->
-
             // reuse a link instance from the pool if the pool is large enough
             if (index < linkPool.size) {
                 inst = linkPool[index]
