@@ -200,8 +200,8 @@ class SciviewBridge: TimepointObserver {
                 sphereLinkNodes.moveAndScaleSpotInSciview(spot) }
         }
 
+        // Three lambdas that are passed to the sciview class to handle the three drag behavior stages with controllers
         moveInstanceVRInit = {
-            logger.info("started VR instance movement")
             bdvNotifier.lockVertexUpdates = true
             currentControllerPos = sciviewToMastodonCoords(VRTracking.getTipPosition())
             selectedSpotInstance?.let {
@@ -216,7 +216,6 @@ class SciviewBridge: TimepointObserver {
         }
 
         moveInstanceVRDrag = {
-            logger.info("dragging in VR...")
             selectedSpotInstance?.let {
                 val newPos = sciviewToMastodonCoords(VRTracking.getTipPosition())
                 val movement = newPos - currentControllerPos
@@ -463,6 +462,7 @@ class SciviewBridge: TimepointObserver {
         sphereLinkNodes.updateLinkColors(forThisBdv.colorizer)
     }
 
+    /** Takes a timepoint and updates the current BDV window's time accordingly. */
     fun updateBDV_TPfromSciview(tp: Int) {
         (bdvWinParamsProvider as DPP_BdvAdapter).bdv.viewerPanelMamut.state().currentTimepoint = tp
     }
@@ -526,7 +526,6 @@ class SciviewBridge: TimepointObserver {
     val detachedDPP_withOwnTime: DPP_DetachedOwnTime
 
     fun showTimepoint(timepoint: Int) {
-
         val maxTP = detachedDPP_withOwnTime.max
         // if we play backwards, start with the highest TP once we reach below 0, otherwise play forward and wrap at maxTP
         detachedDPP_withOwnTime.timepoint = if (timepoint < 0) maxTP else timepoint % maxTP
@@ -551,9 +550,9 @@ class SciviewBridge: TimepointObserver {
             BehaviourTriple(desc_NEXT_TP, key_NEXT_TP, { _, _ -> detachedDPP_withOwnTime.nextTimepoint()
                 updateSciviewContent(detachedDPP_withOwnTime) }),
             BehaviourTriple("Scale Instance Up", "ctrl E",
-                {_, _ -> sphereLinkNodes.scaleSpotAndInstance(selectedSpotInstance, true)}),
+                {_, _ -> sphereLinkNodes.changeSpotRadius(selectedSpotInstance, true)}),
             BehaviourTriple("Scale Instance Down", "ctrl Q",
-                {_, _ -> sphereLinkNodes.scaleSpotAndInstance(selectedSpotInstance, false)}),
+                {_, _ -> sphereLinkNodes.changeSpotRadius(selectedSpotInstance, false)}),
         )
 
         behaviourCollection.forEach {
@@ -656,10 +655,12 @@ class SciviewBridge: TimepointObserver {
         }
     }
 
-    fun launchVR() {
+    /** Starts the sciview VR environment and optionally the eye tracking environment,
+     * depending on the user's selection in the UI. Sends spot and track manipulation callbacks to the VR environment. */
+    fun launchVR(withEyetracking: Boolean = true) {
         isVRactive = true
         thread {
-            if (associatedUI!!.eyeTrackingToggle.isSelected) {
+            if (withEyetracking) {
                 VRTracking = EyeTracking(sciviewWin)
                 (VRTracking as EyeTracking).run()
             } else {
@@ -686,6 +687,7 @@ class SciviewBridge: TimepointObserver {
         }
     }
 
+    /** Stop the VR session and clean up the scene. */
     fun stopVR() {
         isVRactive = false
         VRTracking.unregisterObserver(this)

@@ -25,6 +25,7 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
     lateinit var visToggleTracks: JButton
     lateinit var linkRangeBackwards: SpinnerModel
     lateinit var linkRangeForwards: SpinnerModel
+    lateinit var spotScaleFactor: SpinnerModel
     lateinit var autoIntensityBtn: JToggleButton
     lateinit var lockGroupHandler: GroupLocksHandling
     lateinit var linkColorSelector: JComboBox<String>
@@ -109,6 +110,14 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
             bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastUpdatedSciviewTP)
         }
 
+        spotScaleFactor = addLabeledSpinner(
+            "Spot scale factor",
+            SpinnerNumberModel(1f, 0.1f, 10f, 0.1f)
+        ) { value ->
+            bridge.sphereLinkNodes.sphereScaleFactor = value.toFloat()
+            bridge.sphereLinkNodes.updateSphereScales()
+        }
+
         // Adding dropdowns for link LUTs and volume colors
         val colorSelectorPanel = JPanel(MigLayout("fillx, insets 0", "[right][grow, fill]"))
 
@@ -153,7 +162,7 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
         windowPanel.add(visButtons, "span, growx")
 
         // Eye Tracking
-        startVR = JButton("Start VR").apply { addActionListener { bridge.launchVR() } }
+        startVR = JButton("Start VR").apply { addActionListener { bridge.launchVR(eyeTrackingToggle.isSelected) } }
         stopVR = JButton("Stop VR").apply { addActionListener { bridge.stopVR() } }
         eyeTrackingToggle = JCheckBox("Launch with Eye Tracking")
         eyeTrackingToggle.setSelected(true)
@@ -249,19 +258,15 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
         intensityShiftSpinner.value = bridge.intensity.shift
         intensityClampTopSpinner.value = bridge.intensity.clampTop
         intensityGammaSpinner.value = bridge.intensity.gamma
+        spotScaleFactor.value = bridge.sphereLinkNodes.sphereScaleFactor
         val upperValBackup = bridge.intensity.rangeMax
 
-        intensityRangeSlider
-            .rangeSlider
-            .value = bridge.intensity.rangeMin.toInt()
+        intensityRangeSlider.rangeSlider.value = bridge.intensity.rangeMin.toInt()
         //NB: this triggers a "value changed listener" which updates _both_ the value and upperValue,
         //    which resets the value with the new one (so no change in the end) but clears upperValue
         //    to the value the dialog was left with (forgets the new upperValue effectively)
         bridge.intensity.rangeMax = upperValBackup
-        intensityRangeSlider
-            .rangeSlider
-            .upperValue = bridge.intensity.rangeMax.toInt()
-
+        intensityRangeSlider.rangeSlider.upperValue = bridge.intensity.rangeMax.toInt()
         autoIntensityBtn.isSelected = bridge.isVolumeAutoAdjust
         bridge.updateVolAutomatically = updVolAutoBackup
     }
