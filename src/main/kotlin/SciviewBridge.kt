@@ -680,6 +680,16 @@ class SciviewBridge: TimepointObserver {
             VRTracking.spotMoveInitCallback = moveInstanceVRInit
             VRTracking.spotMoveDragCallback = moveInstanceVRDrag
             VRTracking.spotMoveEndCallback = moveInstanceVREnd
+            VRTracking.rebuildGeometryCallback = {
+                sphereLinkNodes.showInstancedSpots(
+                    detachedDPP_showsLastTimepoint.timepoint,
+                    detachedDPP_showsLastTimepoint.colorizer
+                )
+                sphereLinkNodes.showInstancedLinks(
+                    sphereLinkNodes.currentColorMode,
+                    detachedDPP_showsLastTimepoint.colorizer
+                )
+            }
 
             // register the bridge as an observer to the timepoint changes by the user in VR,
             // allowing us to get updates via the onTimepointUpdated() function
