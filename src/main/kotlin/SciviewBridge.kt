@@ -11,6 +11,7 @@ import graphics.scenery.primitives.Cylinder
 import graphics.scenery.utils.extensions.minus
 import graphics.scenery.utils.extensions.plus
 import graphics.scenery.utils.extensions.times
+import graphics.scenery.utils.extensions.xyz
 import graphics.scenery.utils.lazyLogger
 import graphics.scenery.volumes.BufferedVolume
 import graphics.scenery.volumes.RAIVolume
@@ -25,6 +26,7 @@ import net.imglib2.view.Views
 import org.joml.Matrix4f
 import org.joml.Quaternionf
 import org.joml.Vector3f
+import org.joml.Vector4f
 import org.mastodon.mamut.model.Link
 import org.mastodon.mamut.model.Spot
 import org.mastodon.mamut.views.bdv.MamutViewBdv
@@ -256,20 +258,42 @@ class SciviewBridge: TimepointObserver {
         sciviewWin.deleteNode(axesParent, true)
     }
 
-    /** Convert a [Vector3f] from sciview space into Mastodon's voxel coordinate space.
-     * This assumes the volume has a centered origin. */
+    /** Convert a [Vector3f] from sciview space into Mastodon's voxel coordinate space,
+     * taking the volume's transforms into account. This method assumes the volume has a centered origin. */
     fun sciviewToMastodonCoords(v: Vector3f) : Vector3f {
+
+        val localCoords = Vector3f(v)
+        localCoords.sub(volumeNode.spatial().position)
+        Quaternionf(volumeNode.spatial().rotation).conjugate().transform(localCoords)
+        // Normalize the scale factor, because the volume node isn't scale 1 per default
+        val scaleFactor = Vector3f(volumeNode.spatial().scale).div(sceneScale).mul(1f, 1f, -1f)
+        localCoords.div(scaleFactor)
+        localCoords.div(volumeNode.pixelToWorldRatio)
+        localCoords.div(sceneScale)
+        // Flip Y and Z axes to match Mastodon's coordinate system
+        localCoords.mul(1f, -1f, -1f)
+        // Add offset to center coordinates
         val offset = volumeNode.boundingBox!!.max * 0.5f
-        val scaledV = v.div(volumeNode.pixelToWorldRatio).div(sceneScale) * Vector3f(1f, -1f, -1f)
-        return scaledV + offset
+        localCoords.add(offset)
+        return localCoords
     }
 
-    /** Convert a [Vector3f] from Mastodon's voxel coordinate space into sciview space.
-     * This assumes the volume has a centered origin. */
+    /** Convert a [Vector3f] from Mastodon's voxel coordinate space into sciview space,
+     * taking the volume's transforms into account. This assumes the volume has a centered origin. */
     fun mastodonToSciviewCoords(v: Vector3f) : Vector3f {
+
+        val globalCoords = Vector3f(v)
         val offset = volumeNode.boundingBox!!.max * 0.5f
-        val offsetV = v - offset
-        return offsetV.times(volumeNode.pixelToWorldRatio).times(sceneScale).div(1f, -1f, -1f)
+        globalCoords.sub(offset)
+        globalCoords.div(Vector3f(1f, -1f, -1f))
+        globalCoords.mul(sceneScale)
+        globalCoords.mul(volumeNode.pixelToWorldRatio)
+        val scaleFactor = Vector3f(volumeNode.spatial().scale).div(sceneScale).mul(1f, 1f, -1f)
+        globalCoords.mul(scaleFactor)
+        Quaternionf(volumeNode.spatial().rotation).conjugate().transform(globalCoords)
+        globalCoords.add(volumeNode.spatial().position)
+
+        return globalCoords
     }
 
     /** Adds a volume to the sciview scene, scales it by [scale], adjusts the transfer function to a ramp from [0, 0] to [1, 1]
