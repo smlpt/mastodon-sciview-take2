@@ -219,7 +219,7 @@ class SciviewBridge: TimepointObserver {
             selectedSpotInstance?.let {
                 val newPos = sciviewToMastodonCoords(VRTracking.getTipPosition())
                 val movement = newPos - currentControllerPos
-                selectedSpotInstance?.spatialOrNull()?.position = newPos
+                selectedSpotInstance?.spatialOrNull()?.position?.plus(movement)
                 currentControllerPos = newPos
                 sphereLinkNodes.moveSpotInBDV(it, movement)
                 sphereLinkNodes.updateLinkTransforms(adjacentEdges)
