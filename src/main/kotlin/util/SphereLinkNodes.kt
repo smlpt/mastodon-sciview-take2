@@ -379,6 +379,8 @@ class SphereLinkNodes(
             mastodonData.highlightModel.highlightVertex(spot)
             mastodonData.selectionModel.setSelected(spot, true)
             bridge.selectedSpotInstance = findInstanceFromSpot(spot)
+        } else {
+            bridge.selectedSpotInstance = null
         }
     }
 
