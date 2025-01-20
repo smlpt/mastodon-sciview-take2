@@ -701,6 +701,7 @@ class SciviewBridge: TimepointObserver {
             VRTracking.trackCreationCallback = sphereLinkNodes.addTrackToMastodon
             VRTracking.spotCreationCallback = sphereLinkNodes.addSpotToMastodon
             VRTracking.spotSelectionCallback = sphereLinkNodes.selectClosestSpotVR
+            VRTracking.spotDeletionCallback = sphereLinkNodes.deleteSelectedSpot
             VRTracking.spotMoveInitCallback = moveInstanceVRInit
             VRTracking.spotMoveDragCallback = moveInstanceVRDrag
             VRTracking.spotMoveEndCallback = moveInstanceVREnd

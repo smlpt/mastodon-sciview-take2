@@ -384,6 +384,17 @@ class SphereLinkNodes(
         }
     }
 
+    /** Deletes the currently selected Spots from the graph. */
+    val deleteSelectedSpot: (() -> Unit) = {
+        mastodonData.selectionModel.selectedVertices.forEach {
+            mastodonData.model.graph.remove(it)
+            logger.info("Deleted spot $it")
+            it.incomingEdges().forEach {
+
+            }
+        }
+    }
+
     fun clearSpotSelection() {
         mastodonData.focusModel.focusVertex(null)
         mastodonData.selectionModel.clearSelection()
@@ -673,7 +684,8 @@ class SphereLinkNodes(
         }
     }
 
-    /** Lambda that is passed to sciview to send individual spots from sciview to Mastodon. */
+    /** Lambda that is passed to sciview to send individual spots from sciview to Mastodon.
+     * Takes the timepoint and the sciview position. */
     val addSpotToMastodon: (Int, Vector3f) -> Unit = { tp, sciviewPos ->
         val pos = bridge.sciviewToMastodonCoords(sciviewPos)
         val bb = bridge.volumeNode.boundingBox
