@@ -11,7 +11,6 @@ import graphics.scenery.primitives.Cylinder
 import graphics.scenery.utils.extensions.minus
 import graphics.scenery.utils.extensions.plus
 import graphics.scenery.utils.extensions.times
-import graphics.scenery.utils.extensions.xyz
 import graphics.scenery.utils.lazyLogger
 import graphics.scenery.volumes.BufferedVolume
 import graphics.scenery.volumes.RAIVolume
@@ -26,7 +25,6 @@ import net.imglib2.view.Views
 import org.joml.Matrix4f
 import org.joml.Quaternionf
 import org.joml.Vector3f
-import org.joml.Vector4f
 import org.mastodon.mamut.model.Link
 import org.mastodon.mamut.model.Spot
 import org.mastodon.mamut.views.bdv.MamutViewBdv
@@ -110,6 +108,7 @@ class SciviewBridge: TimepointObserver {
     private var moveInstanceVRInit: (Vector3f) -> Unit
     private var moveInstanceVRDrag: (Vector3f) -> Unit
     private var moveInstanceVREnd: (Vector3f) -> Unit
+    private var resetControllerTrack: () -> Unit
 
     constructor(
         mastodonMainWindow: ProjectModel,
@@ -232,6 +231,10 @@ class SciviewBridge: TimepointObserver {
             bdvNotifier.lockVertexUpdates = false
             sphereLinkNodes.showInstancedSpots(detachedDPP_showsLastTimepoint.timepoint,
                 detachedDPP_showsLastTimepoint.colorizer)
+        }
+
+        resetControllerTrack = {
+            sphereLinkNodes.lastCreatedSpot = null
         }
 
         registerKeyboardHandlers()
@@ -480,6 +483,7 @@ class SciviewBridge: TimepointObserver {
 
     /** Calls [updateSciviewTPfromBDV] and [SphereLinkNodes.showInstancedSpots] to update the current volume and corresponding spots. */
     fun updateSciviewContent(forThisBdv: DisplayParamsProvider) {
+        logger.debug("Called updateSciviewContent")
         updateSciviewTPfromBDV(forThisBdv)
         sphereLinkNodes.showInstancedSpots(forThisBdv.timepoint, forThisBdv.colorizer)
         sphereLinkNodes.updateLinkVisibility(forThisBdv.timepoint)
@@ -488,6 +492,7 @@ class SciviewBridge: TimepointObserver {
 
     /** Takes a timepoint and updates the current BDV window's time accordingly. */
     fun updateBDV_TPfromSciview(tp: Int) {
+        logger.debug("Updated BDV timepoint from sciview")
         (bdvWinParamsProvider as DPP_BdvAdapter).bdv.viewerPanelMamut.state().currentTimepoint = tp
     }
 
@@ -693,11 +698,11 @@ class SciviewBridge: TimepointObserver {
             }
 
             // Pass track and spot handling callbacks to sciview
-            VRTracking.finalTrackCallback = {
-                logger.info("called mastodonUpdateGraph")
-                updateSciviewContent(bdvWinParamsProvider!!)
-                sphereLinkNodes.showInstancedLinks(sphereLinkNodes.currentColorMode, bdvWinParamsProvider!!.colorizer)
-            }
+//            VRTracking.finalTrackCallback = {
+//                logger.info("called mastodonUpdateGraph")
+//                updateSciviewContent(bdvWinParamsProvider!!)
+//                sphereLinkNodes.showInstancedLinks(sphereLinkNodes.currentColorMode, bdvWinParamsProvider!!.colorizer)
+//            }
             VRTracking.trackCreationCallback = sphereLinkNodes.addTrackToMastodon
             VRTracking.spotCreationCallback = sphereLinkNodes.addSpotToMastodon
             VRTracking.spotSelectionCallback = sphereLinkNodes.selectClosestSpotVR
@@ -705,7 +710,10 @@ class SciviewBridge: TimepointObserver {
             VRTracking.spotMoveInitCallback = moveInstanceVRInit
             VRTracking.spotMoveDragCallback = moveInstanceVRDrag
             VRTracking.spotMoveEndCallback = moveInstanceVREnd
+            VRTracking.spotLinkCallback = sphereLinkNodes.linkSelectedToExistingSpot
+            VRTracking.resetTrackingCallback = resetControllerTrack
             VRTracking.rebuildGeometryCallback = {
+                logger.debug("Called rebuildGeometryCallback")
                 sphereLinkNodes.showInstancedSpots(
                     detachedDPP_showsLastTimepoint.timepoint,
                     detachedDPP_showsLastTimepoint.colorizer
@@ -717,7 +725,7 @@ class SciviewBridge: TimepointObserver {
             }
 
             // register the bridge as an observer to the timepoint changes by the user in VR,
-            // allowing us to get updates via the onTimepointUpdated() function
+            // allowing us to get updates via the onTimepointChanged() function
             VRTracking.registerObserver(this)
         }
     }
@@ -743,6 +751,7 @@ class SciviewBridge: TimepointObserver {
     /** Implementation of the [TimepointObserver] interface; this method is called whenever the VR user triggers
      *  a timepoint change or plays the animation */
     override fun onTimePointChanged(timepoint: Int) {
+        logger.debug("Called onTimepointChanged")
         updateBDV_TPfromSciview(timepoint)
         showTimepoint(timepoint)
     }
