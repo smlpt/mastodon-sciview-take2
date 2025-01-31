@@ -35,15 +35,19 @@ import org.mastodon.ui.coloring.TagSetGraphColorGenerator
 import org.scijava.event.EventService
 import org.scijava.ui.behaviour.ClickBehaviour
 import org.scijava.ui.behaviour.DragBehaviour
+import org.scijava.ui.behaviour.util.Actions
 import sc.iview.SciView
 import sc.iview.commands.demo.advanced.CellTrackingBase
 import sc.iview.commands.demo.advanced.EyeTracking
 import sc.iview.commands.demo.advanced.TimepointObserver
 import util.SphereLinkNodes
+import java.awt.event.ActionEvent
+import javax.swing.Action
 import javax.swing.JFrame
 import javax.swing.JPanel
 import kotlin.concurrent.thread
 import kotlin.math.*
+
 
 class SciviewBridge: TimepointObserver {
     private val logger by lazyLogger()
@@ -96,7 +100,7 @@ class SciviewBridge: TimepointObserver {
     var selectedSpotInstance: InstancedNode.Instance? = null
     // the event watcher for BDV, needed here for the lock handling to prevent BDV from
     // triggering the event watcher while a spot is edited in Sciview
-    lateinit var bdvNotifier: BdvNotifier
+    var bdvNotifier: BdvNotifier? = null
     var moveSpotInSciview: (Spot?) -> Unit?
     var associatedUI: SciviewBridgeUIMig? = null
     var uiFrame: JFrame? = null
@@ -109,6 +113,17 @@ class SciviewBridge: TimepointObserver {
     private var moveInstanceVRDrag: (Vector3f) -> Unit
     private var moveInstanceVREnd: (Vector3f) -> Unit
     private var resetControllerTrack: () -> Unit
+
+    private val pluginActions: Actions
+    private val predictSpotsAction: Action
+    private val predictSpotsCallback: (() -> Unit)
+    private val trainSpotsAction: Action
+    private val trainsSpotsCallback: (() -> Unit)
+//    private val trainFlowAction: Action
+//    private val trainFlowCallback: (() -> Unit)
+    private val neighborLinkingAction: Action
+    private val neighborLinkingCallback: (() -> Unit)
+    private val stageSpotsCallback: (() -> Unit)
 
     constructor(
         mastodonMainWindow: ProjectModel,
@@ -203,7 +218,7 @@ class SciviewBridge: TimepointObserver {
 
         // Three lambdas that are passed to the sciview class to handle the three drag behavior stages with controllers
         moveInstanceVRInit = {
-            bdvNotifier.lockVertexUpdates = true
+            bdvNotifier?.lockVertexUpdates = true
             currentControllerPos = sciviewToMastodonCoords(VRTracking.getTipPosition())
             selectedSpotInstance?.let {
                 val spot = sphereLinkNodes.findSpotFromInstance(selectedSpotInstance!!)
@@ -217,6 +232,7 @@ class SciviewBridge: TimepointObserver {
         }
 
         moveInstanceVRDrag = {
+            logger.info("selected spot instance is $selectedSpotInstance")
             selectedSpotInstance?.let {
                 val newPos = sciviewToMastodonCoords(VRTracking.getTipPosition())
                 val movement = newPos - currentControllerPos
@@ -228,13 +244,43 @@ class SciviewBridge: TimepointObserver {
         }
 
         moveInstanceVREnd = {
-            bdvNotifier.lockVertexUpdates = false
+            bdvNotifier?.lockVertexUpdates = false
             sphereLinkNodes.showInstancedSpots(detachedDPP_showsLastTimepoint.timepoint,
                 detachedDPP_showsLastTimepoint.colorizer)
         }
 
         resetControllerTrack = {
             sphereLinkNodes.lastCreatedSpot = null
+        }
+
+        pluginActions = mastodon.plugins.pluginActions
+        predictSpotsAction = pluginActions.actionMap.get("[elephant] predict spots")
+        predictSpotsCallback = {
+            logger.info("Predicting spots...")
+            predictSpotsAction?.actionPerformed(ActionEvent(pluginActions, 0, null))
+        }
+        trainSpotsAction = pluginActions.actionMap.get("[elephant] train detection model (all timepoints)")
+        trainsSpotsCallback = {
+            logger.info("Training spots from all timepoints...")
+            trainSpotsAction?.actionPerformed(ActionEvent(pluginActions, 0, null))
+        }
+        neighborLinkingAction = pluginActions.actionMap.get("[elephant] nearest neighbor linking")
+        neighborLinkingCallback = {
+            logger.info("Linking nearest neighbors...")
+            neighborLinkingAction?.actionPerformed(ActionEvent(pluginActions, 0, null))
+        }
+        stageSpotsCallback = {
+            logger.info("Adding all spots to the true positiv tag set...")
+            val tsModel = mastodon.model.tagSetModel
+            val detectionTS = tsModel.tagSetStructure.tagSets.find { it.name == "Detection" }
+            val tpTag = detectionTS?.tags?.find { it.label() == "tp" }
+            if (tpTag == null) {
+                logger.warn("Could not find true positive tag set in Detection! Please ensure the tag set and tag exist.")
+            } else {
+                sphereLinkNodes.spots.forEach { s ->
+                tsModel.vertexTags.set(s, tpTag)
+                }
+            }
         }
 
         registerKeyboardHandlers()
@@ -635,7 +681,7 @@ class SciviewBridge: TimepointObserver {
         private var edges: MutableList<Link> = ArrayList()
 
         override fun init(x: Int, y: Int) {
-            bdvNotifier.lockVertexUpdates = true
+            bdvNotifier?.lockVertexUpdates = true
             cam?.let { cam ->
                 val (rayStart, rayDir) = cam.screenPointToRay(x, y)
                 rayDir.normalize()
@@ -678,7 +724,7 @@ class SciviewBridge: TimepointObserver {
         }
 
         override fun end(x: Int, y: Int) {
-            bdvNotifier.lockVertexUpdates = false
+            bdvNotifier?.lockVertexUpdates = false
             sphereLinkNodes.showInstancedSpots(detachedDPP_showsLastTimepoint.timepoint,
                 detachedDPP_showsLastTimepoint.colorizer)
         }
@@ -723,6 +769,11 @@ class SciviewBridge: TimepointObserver {
                     detachedDPP_showsLastTimepoint.colorizer
                 )
             }
+            VRTracking.predictSpotsCallback = predictSpotsCallback
+            VRTracking.trainSpotsCallback = trainsSpotsCallback
+            VRTracking.trainFlowCallback = null
+            VRTracking.neighborLinkingCallback = neighborLinkingCallback
+            VRTracking.stageSpotsCallback = stageSpotsCallback
 
             // register the bridge as an observer to the timepoint changes by the user in VR,
             // allowing us to get updates via the onTimepointChanged() function

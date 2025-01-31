@@ -137,6 +137,7 @@ class SphereLinkNodes(
 
         var index = 0
         logger.debug("we have ${spots.size()} spots in this Mastodon time point.")
+        bridge.bdvNotifier?.lockVertexUpdates = true
         for (spot in spots) {
             // reuse a spot instance from the pool if the pool is large enough
             if (index < spotPool.size) {
@@ -175,7 +176,7 @@ class SphereLinkNodes(
 
             index++
         }
-
+        bridge.bdvNotifier?.lockVertexUpdates = false
         // turn all leftover spots from the pool invisible
         var i = index
         while (i < spotPool.size) {
@@ -364,8 +365,8 @@ class SphereLinkNodes(
         }
     }
 
-    /** Lambda that performs nearest neighbor search in the current timepoint,
-     * based on a position given by the VR controller. The float specifies the maximum range
+    /** Lambda that performs nearest neighbor search in the current timepoint (Int),
+     * based on a position given by the VR controller (Vector3f). The float specifies the maximum range
      * (multiple of [sphereScaleFactor]) in which the selection is counted as such. Returns true if a spot was selected. */
     val selectClosestSpotVR: ((Vector3f, Int, Float) -> Boolean) = { pos, tp, radius ->
         logger.debug("trying to select the closest spot")
@@ -388,6 +389,7 @@ class SphereLinkNodes(
                 mastodonData.highlightModel.highlightVertex(spot)
                 mastodonData.selectionModel.setSelected(spot, true)
                 bridge.selectedSpotInstance = findInstanceFromSpot(spot)
+                lastCreatedSpot = spot
                 logger.info("Selected spot $spot")
             } else {
                 bridge.selectedSpotInstance = null
@@ -690,7 +692,7 @@ class SphereLinkNodes(
     val addTrackToMastodon: (List<Pair<Vector3f, SpineGraphVertex>>) -> Unit = { list ->
         logger.info("got this track list: l${list.joinToString { ", " }}")
         var prevVertex: Spot? = null
-        bridge.bdvNotifier.lockVertexUpdates = true
+        bridge.bdvNotifier?.lockVertexUpdates = true
         list.forEachIndexed { index, (pos, spineVertex) ->
             val v = mastodonData.model.graph.addVertex()
             val p = pos.toDoubleArray()
@@ -704,7 +706,7 @@ class SphereLinkNodes(
             }
             prevVertex = v
         }
-        bridge.bdvNotifier.lockVertexUpdates = false
+        bridge.bdvNotifier?.lockVertexUpdates = false
     }
 
     /** Lambda that is passed to sciview to send individual spots from sciview to Mastodon.
@@ -715,7 +717,7 @@ class SphereLinkNodes(
         val bb = bridge.volumeNode.boundingBox
         if (bb != null) {
             if (bb.isInside(pos)) {
-                bridge.bdvNotifier.lockVertexUpdates = true
+                bridge.bdvNotifier?.lockVertexUpdates = true
                 val v = mastodonData.model.graph.addVertex()
                 v.init(tp, pos.toDoubleArray(), 10.0)
                 logger.info("Added new spot with controller at position $pos.")
@@ -725,7 +727,7 @@ class SphereLinkNodes(
                     logger.info("added a new edge: $e, connecting $lastCreatedSpot with $v")
                 }
                 lastCreatedSpot = v
-                bridge.bdvNotifier.lockVertexUpdates = false
+                bridge.bdvNotifier?.lockVertexUpdates = false
             } else {
                 logger.warn("Not adding new spot, $pos is outside the volume!")
             }
