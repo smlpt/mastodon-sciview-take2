@@ -107,7 +107,6 @@ class SciviewBridge: TimepointObserver {
     var isVRactive = false
 
     lateinit var VRTracking: CellTrackingBase
-    var currentControllerPos = Vector3f()
     private var adjacentEdges: MutableList<Link> = ArrayList()
     private var moveInstanceVRInit: (Vector3f) -> Unit
     private var moveInstanceVRDrag: (Vector3f) -> Unit
@@ -216,6 +215,8 @@ class SciviewBridge: TimepointObserver {
                 sphereLinkNodes.moveAndScaleSpotInSciview(spot) }
         }
 
+        var currentControllerPos = Vector3f()
+
         // Three lambdas that are passed to the sciview class to handle the three drag behavior stages with controllers
         moveInstanceVRInit = {
             bdvNotifier?.lockVertexUpdates = true
@@ -232,11 +233,13 @@ class SciviewBridge: TimepointObserver {
         }
 
         moveInstanceVRDrag = {
-            logger.info("selected spot instance is $selectedSpotInstance")
+            logger.debug("selected spot instance is $selectedSpotInstance")
             selectedSpotInstance?.let {
                 val newPos = sciviewToMastodonCoords(VRTracking.getTipPosition())
                 val movement = newPos - currentControllerPos
-                selectedSpotInstance?.spatialOrNull()?.position?.plus(movement)
+                it.spatial {
+                    position += movement
+                }
                 currentControllerPos = newPos
                 sphereLinkNodes.moveSpotInBDV(it, movement)
                 sphereLinkNodes.updateLinkTransforms(adjacentEdges)
@@ -258,6 +261,8 @@ class SciviewBridge: TimepointObserver {
         predictSpotsCallback = {
             logger.info("Predicting spots...")
             predictSpotsAction?.actionPerformed(ActionEvent(pluginActions, 0, null))
+            sphereLinkNodes.showInstancedSpots(detachedDPP_showsLastTimepoint.timepoint,
+                detachedDPP_showsLastTimepoint.colorizer)
         }
         trainSpotsAction = pluginActions.actionMap.get("[elephant] train detection model (all timepoints)")
         trainsSpotsCallback = {
