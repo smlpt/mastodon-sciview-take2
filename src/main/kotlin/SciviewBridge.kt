@@ -154,7 +154,7 @@ class SciviewBridge: TimepointObserver {
             if (l.name.startsWith("headli") && l is PointLight) adjustHeadLight(l)
         }
         sciviewWin.addNode(AmbientLight(0.05f, Vector3f(1f, 1f, 1f)))
-        sciviewWin.camera?.spatial()?.move(30f, 2)
+//        sciviewWin.camera?.spatial()?.move(30f, 2)
 
         //add "root" with data axes
         axesParent = constructDataAxes()
@@ -197,6 +197,8 @@ class SciviewBridge: TimepointObserver {
         )
         // flip Z axis to align it with the synced BDV view
         volumeNode.spatial().scale *= Vector3f(1f, 1f, -1f)
+
+        centerCameraOnVolume()
 
         logger.info("volume node scale is ${volumeNode.spatialOrNull()?.scale}")
 
@@ -293,6 +295,24 @@ class SciviewBridge: TimepointObserver {
 
     val eventService: EventService?
         get() = sciviewWin.scijavaContext?.getService(EventService::class.java)
+
+    /** Centers the camera on the volume and adjusts its distance to fully fit the volume into the camera's FOV. */
+    private fun centerCameraOnVolume() {
+        // get the extend of the volume in sciview coordinates
+        val volSize = (volumeNode.boundingBox!!.max - volumeNode.boundingBox!!.min) * volumeNode.pixelToWorldRatio * sceneScale
+        val hFOVRad = Math.toRadians((sciviewWin.camera?.fov ?: 70f).toDouble())
+        val aspectRatio = sciviewWin.camera?.aspectRatio() ?: 1f
+        val vFOVRad = 2 * atan(tan(hFOVRad / 2.0) / aspectRatio)
+        // calculate the maximum distances for vertical and horizontal FOV
+        val distanceHeight = (volSize.y / 2f) / tan(vFOVRad / 2.0)
+        val distanceWidth = (volSize.x / 2f) / tan(hFOVRad / 2.0)
+        val maxDistance = max(distanceWidth, distanceHeight) * 1.2f // add a little margin
+
+        sciviewWin.camera?.spatial {
+            rotation = Quaternionf().lookAlong(Vector3f(0f, 0f, 1f), Vector3f(0f, 1f, 0f))
+            position = Vector3f(0f, 0f, maxDistance.toFloat())
+        }
+    }
 
     fun close() {
         detachControllingUI()
@@ -459,7 +479,7 @@ class SciviewBridge: TimepointObserver {
                     // time point processor
                     { updateSciviewContent(it) },
                     // view update processor
-                    { updateSciviewCamera(bdvWin) },
+                    { updateSciviewCameraFromBDV(bdvWin) },
                     // vertex update processor
                     moveSpotInSciview as (Spot?) -> Unit,
                     // graph update processor: redraws track segments and spots
@@ -570,7 +590,7 @@ class SciviewBridge: TimepointObserver {
         }
     }
 
-    private fun updateSciviewCamera(forThisBdv: MamutViewBdv) {
+    private fun updateSciviewCameraFromBDV(forThisBdv: MamutViewBdv) {
         // Let's not move the camera around when the user is in VR
         if (isVRactive) {
             return
@@ -802,6 +822,7 @@ class SciviewBridge: TimepointObserver {
         sciviewWin.centerOnNode(axesParent)
         sciviewWin.requestPropEditorRefresh()
         registerKeyboardHandlers()
+        centerCameraOnVolume()
     }
 
     /** Implementation of the [TimepointObserver] interface; this method is called whenever the VR user triggers
