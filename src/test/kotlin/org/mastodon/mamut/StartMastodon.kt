@@ -26,6 +26,7 @@ object StartMastodon {
             launcher.setLocationRelativeTo(null)
             launcher.isVisible = true
         } catch (e: Exception) {
+            e.printStackTrace()
             logger.error("Got this exception: ${e.message}")
         }
     }
