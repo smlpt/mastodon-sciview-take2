@@ -8,6 +8,7 @@ import graphics.scenery.*
 import graphics.scenery.controls.behaviours.SelectCommand
 import graphics.scenery.controls.behaviours.WithCameraDelegateBase
 import graphics.scenery.primitives.Cylinder
+import graphics.scenery.primitives.TextBoard
 import graphics.scenery.utils.extensions.minus
 import graphics.scenery.utils.extensions.plus
 import graphics.scenery.utils.extensions.times
@@ -92,6 +93,7 @@ class SciviewBridge: TimepointObserver {
 //    val sphereParent: Group
 //    val linkParent: Group
     var volumeNode: Volume
+    val volumeTPWidget = TextBoard()
     var spimSource: Source<out Any>
     // the source and converter that contains our volume data
     var sac: SourceAndConverter<*>
@@ -200,6 +202,20 @@ class SciviewBridge: TimepointObserver {
         volumeNode.spatial().scale *= Vector3f(1f, 1f, -1f)
 
         centerCameraOnVolume()
+
+        val tpWidgetPos = Vector3f(
+             0f,
+            mastodonToSciviewCoords(volumeNode.boundingBox?.max ?: Vector3f(100f)).x,
+            0f
+        ).times(0.8f)
+        volumeTPWidget.text = volumeNode.currentTimepoint.toString()
+        volumeTPWidget.name = "Volume Timepoint Widget"
+        volumeTPWidget.spatial {
+            scale = Vector3f(0.1f)
+            position = tpWidgetPos
+        }
+
+        sciviewWin.addNode(volumeTPWidget, activePublish = false)
 
         logger.info("volume node scale is ${volumeNode.spatialOrNull()?.scale}")
 
@@ -562,6 +578,7 @@ class SciviewBridge: TimepointObserver {
     fun updateSciviewContent(forThisBdv: DisplayParamsProvider) {
         logger.debug("Called updateSciviewContent")
         updateSciviewTPfromBDV(forThisBdv)
+        volumeTPWidget.text = volumeNode.currentTimepoint.toString()
         sphereLinkNodes.showInstancedSpots(forThisBdv.timepoint, forThisBdv.colorizer)
         sphereLinkNodes.updateLinkVisibility(forThisBdv.timepoint)
         sphereLinkNodes.updateLinkColors(forThisBdv.colorizer)
