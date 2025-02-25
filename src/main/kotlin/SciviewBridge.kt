@@ -47,6 +47,7 @@ import javax.swing.JFrame
 import javax.swing.JPanel
 import kotlin.concurrent.thread
 import kotlin.math.*
+import kotlin.time.TimeSource
 
 
 class SciviewBridge: TimepointObserver {
@@ -269,7 +270,9 @@ class SciviewBridge: TimepointObserver {
         trainSpotsAction = pluginActions.actionMap.get("[elephant] train detection model (all timepoints)")
         trainsSpotsCallback = {
             logger.info("Training spots from all timepoints...")
+            val start = TimeSource.Monotonic.markNow()
             trainSpotsAction?.actionPerformed(ActionEvent(pluginActions, 0, null))
+            logger.info("Training spots took ${start.elapsedNow()} ms")
         }
         neighborLinkingAction = pluginActions.actionMap.get("[elephant] nearest neighbor linking")
         neighborLinkingCallback = {
@@ -285,8 +288,11 @@ class SciviewBridge: TimepointObserver {
                 logger.warn("Could not find true positive tag set in Detection! Please ensure the tag set and tag exist.")
             } else {
                 sphereLinkNodes.spots.forEach { s ->
-                tsModel.vertexTags.set(s, tpTag)
+                    tsModel.vertexTags.set(s, tpTag)
                 }
+                sphereLinkNodes.showInstancedSpots(
+                    detachedDPP_showsLastTimepoint.timepoint,
+                    detachedDPP_showsLastTimepoint.colorizer)
             }
         }
 

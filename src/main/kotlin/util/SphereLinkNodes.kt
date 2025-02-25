@@ -409,14 +409,26 @@ class SphereLinkNodes(
         }
     }
 
-    /** Link the previously created spot to a currently selected spot. */
+    /** Link the previously created spot to a currently selected spot, or set the selected spot as the "previously created",
+     * so the user can start a new track from an existing spot. */
     val linkSelectedToExistingSpot: (() -> Unit) = {
-        if (mastodonData.selectionModel.selectedVertices.size > 0 && lastCreatedSpot != null) {
-            logger.info("Merging spot with existing spot")
+        if (mastodonData.selectionModel.selectedVertices.size > 0) {
             val selected = mastodonData.selectionModel.selectedVertices.first()
-            val e = mastodonData.model.graph.addEdge(lastCreatedSpot, selected)
-            e.init()
-            mastodonData.model.graph.notifyGraphChanged()
+            // Link the spots if we previously generated a spot
+            if (lastCreatedSpot != null) {
+                logger.info("Merging spot with existing spot")
+                val e = mastodonData.model.graph.addEdge(lastCreatedSpot, selected)
+                e.init()
+                mastodonData.model.graph.notifyGraphChanged()
+            } else {
+                // If this linking method was called, it means the user clicked on a spot in VR and selected it.
+                // If no previously created spot exists, it means we are at the beginning of a track,
+                // and the user wants to select a new starting point to track from.
+                logger.info("Clicked on a spot without a previously creat spot, so let's start tracking from here.")
+                lastCreatedSpot = selected
+            }
+        } else {
+            logger.info("Cannot link spots, as no previous spot was selected!")
         }
     }
 
@@ -690,23 +702,27 @@ class SphereLinkNodes(
 
     /** Passed to EyeTracking to send a list of vertices from sciview to Mastodon. */
     val addTrackToMastodon: (List<Pair<Vector3f, SpineGraphVertex>>) -> Unit = { list ->
-        logger.info("got this track list: l${list.joinToString { ", " }}")
+        logger.debug("got this track list: ${list.joinToString { pair ->
+            "${pair.second}" } }")
         var prevVertex: Spot? = null
         bridge.bdvNotifier?.lockVertexUpdates = true
+        val lock = mastodonData.model.graph.lock.writeLock()
+        lock.lock()
         list.forEachIndexed { index, (pos, spineVertex) ->
             val v = mastodonData.model.graph.addVertex()
             val p = pos.toDoubleArray()
             v.init(spineVertex.timepoint, p, 10.0)
-            logger.info("added vertex $v at position $pos")
+            logger.debug("added vertex $v")
             // start adding edges once the first vertex was added
             if (index > 0) {
                 val e = mastodonData.model.graph.addEdge(prevVertex, v)
                 e.init()
-                mastodonData.model.graph.notifyGraphChanged()
             }
             prevVertex = v
         }
+        lock.unlock()
         bridge.bdvNotifier?.lockVertexUpdates = false
+        mastodonData.model.graph.notifyGraphChanged()
     }
 
     /** Lambda that is passed to sciview to send individual spots from sciview to Mastodon.
