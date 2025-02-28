@@ -239,7 +239,7 @@ class SciviewBridge: TimepointObserver {
         // Three lambdas that are passed to the sciview class to handle the three drag behavior stages with controllers
         moveInstanceVRInit = {
             bdvNotifier?.lockVertexUpdates = true
-            currentControllerPos = sciviewToMastodonCoords(VRTracking.getTipPosition())
+            currentControllerPos = sciviewToMastodonCoords(VRTracking.getCursorPosition())
             selectedSpotInstance?.let {
                 val spot = sphereLinkNodes.findSpotFromInstance(selectedSpotInstance!!)
                 mastodon.model.graph.vertexRef().refTo(spot).incomingEdges().forEach {
@@ -254,7 +254,7 @@ class SciviewBridge: TimepointObserver {
         moveInstanceVRDrag = {
             logger.debug("selected spot instance is $selectedSpotInstance")
             selectedSpotInstance?.let {
-                val newPos = sciviewToMastodonCoords(VRTracking.getTipPosition())
+                val newPos = sciviewToMastodonCoords(VRTracking.getCursorPosition())
                 val movement = newPos - currentControllerPos
                 it.spatial {
                     position += movement
@@ -792,15 +792,10 @@ class SciviewBridge: TimepointObserver {
             }
 
             // Pass track and spot handling callbacks to sciview
-//            VRTracking.finalTrackCallback = {
-//                logger.info("called mastodonUpdateGraph")
-//                updateSciviewContent(bdvWinParamsProvider!!)
-//                sphereLinkNodes.showInstancedLinks(sphereLinkNodes.currentColorMode, bdvWinParamsProvider!!.colorizer)
-//            }
             VRTracking.trackCreationCallback = sphereLinkNodes.addTrackToMastodon
-            VRTracking.spotCreationCallback = sphereLinkNodes.addSpotToMastodon
+            VRTracking.spotCreateDeleteCallback = sphereLinkNodes.addOrRemoveSpot
             VRTracking.spotSelectionCallback = sphereLinkNodes.selectClosestSpotVR
-            VRTracking.spotDeletionCallback = sphereLinkNodes.deleteSelectedSpot
+//            VRTracking.spotDeletionCallback = sphereLinkNodes.deleteSelectedSpot
             VRTracking.spotMoveInitCallback = moveInstanceVRInit
             VRTracking.spotMoveDragCallback = moveInstanceVRDrag
             VRTracking.spotMoveEndCallback = moveInstanceVREnd
@@ -822,6 +817,11 @@ class SciviewBridge: TimepointObserver {
             VRTracking.trainFlowCallback = null
             VRTracking.neighborLinkingCallback = neighborLinkingCallback
             VRTracking.stageSpotsCallback = stageSpotsCallback
+
+            VRTracking.mastodonUndoCallback = {
+                mastodon.model.undo()
+                logger.info("Undid last change.")
+            }
 
             // register the bridge as an observer to the timepoint changes by the user in VR,
             // allowing us to get updates via the onTimepointChanged() function
