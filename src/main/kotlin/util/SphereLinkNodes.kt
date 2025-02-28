@@ -403,6 +403,7 @@ class SphereLinkNodes(
 
     /** Deletes the currently selected Spots from the graph. */
     val deleteSelectedSpot: (() -> Unit) = {
+        logger.info("Called deleteSelectedSpot, trying to delete spot now...")
         mastodonData.selectionModel.selectedVertices.forEach {
             mastodonData.model.graph.remove(it)
             logger.info("Deleted spot $it")
@@ -421,10 +422,10 @@ class SphereLinkNodes(
                 e.init()
                 mastodonData.model.graph.notifyGraphChanged()
             } else {
-                // If this linking method was called, it means the user clicked on a spot in VR and selected it.
+                // If this linking method was called, it means the user clicked on a spot in VR and selected it during the tracking process.
                 // If no previously created spot exists, it means we are at the beginning of a track,
                 // and the user wants to select a new starting point to track from.
-                logger.info("Clicked on a spot without a previously creat spot, so let's start tracking from here.")
+                logger.info("Clicked on a spot without a previously created spot, so let's start tracking from here.")
                 lastCreatedSpot = selected
             }
         } else {
@@ -725,27 +726,36 @@ class SphereLinkNodes(
         mastodonData.model.graph.notifyGraphChanged()
     }
 
-    /** Lambda that is passed to sciview to send individual spots from sciview to Mastodon.
+    /** Lambda that is passed to sciview to send individual spots from sciview to Mastodon
+     * or delete them if a spot is already selected, as we use the same VR button for creation and deletion.
      * Takes the timepoint and the sciview position. connectToPrev allows to connect the newly created spot to be connected
      * to the previously created spot.  */
-    val addSpotToMastodon: (tp: Int, sciviewPos: Vector3f, connectToPrev: Boolean) -> Unit = { tp, sciviewPos, connect ->
-        val pos = bridge.sciviewToMastodonCoords(sciviewPos)
-        val bb = bridge.volumeNode.boundingBox
-        if (bb != null) {
-            if (bb.isInside(pos)) {
-                bridge.bdvNotifier?.lockVertexUpdates = true
-                val v = mastodonData.model.graph.addVertex()
-                v.init(tp, pos.toDoubleArray(), 10.0)
-                logger.info("Added new spot with controller at position $pos.")
-                if (connect && lastCreatedSpot != null) {
-                    val e = mastodonData.model.graph.addEdge(lastCreatedSpot, v)
-                    e.init()
-                    logger.info("added a new edge: $e, connecting $lastCreatedSpot with $v")
+    val addOrRemoveSpot: (tp: Int, sciviewPos: Vector3f, connectToPrev: Boolean) -> Unit = { tp, sciviewPos, connect ->
+        // Check if a spot is selected, and perform deletion if true
+        if (!mastodonData.selectionModel.selectedVertices.isEmpty()) {
+            deleteSelectedSpot.invoke()
+        } else {
+            val pos = bridge.sciviewToMastodonCoords(sciviewPos)
+            val bb = bridge.volumeNode.boundingBox
+            if (bb != null) {
+                if (bb.isInside(pos)) {
+                    bridge.bdvNotifier?.lockVertexUpdates = true
+                    mastodonData.model.graph.lock.readLock().lock()
+                    val v = mastodonData.model.graph.addVertex()
+                    v.init(tp, pos.toDoubleArray(), 10.0)
+                    logger.info("Added new spot with controller at position $pos.")
+                    if (connect && lastCreatedSpot != null) {
+                        val e = mastodonData.model.graph.addEdge(lastCreatedSpot, v)
+                        e.init()
+                        logger.info("added a new edge: $e, connecting $lastCreatedSpot with $v")
+                    }
+                    lastCreatedSpot = v
+                    bridge.bdvNotifier?.lockVertexUpdates = false
+                    mastodonData.model.graph.lock.readLock().unlock()
+                    logger.info("we now have ${mastodonData.model.graph.vertices().size} spots in total")
+                } else {
+                    logger.warn("Not adding new spot, $pos is outside the volume!")
                 }
-                lastCreatedSpot = v
-                bridge.bdvNotifier?.lockVertexUpdates = false
-            } else {
-                logger.warn("Not adding new spot, $pos is outside the volume!")
             }
         }
     }
