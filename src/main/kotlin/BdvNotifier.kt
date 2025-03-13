@@ -11,6 +11,7 @@ import org.mastodon.mamut.model.Link
 import org.mastodon.mamut.model.Spot
 import org.mastodon.mamut.views.bdv.MamutViewBdv
 import org.mastodon.model.FocusListener
+import org.mastodon.model.SelectionListener
 import org.mastodon.spatial.VertexPositionListener
 import org.mastodon.ui.coloring.ColoringModel.ColoringChangedListener
 import java.beans.PropertyChangeEvent
@@ -44,7 +45,7 @@ class BdvNotifier(
 
     init {
         //create a listener for it (which will _immediately_ collect updates from BDV)
-        val bdvUpdateListener = BdvEventsWatcher(bdvWindow)
+        val bdvUpdateListener = BdvEventsWatcher(bdvWindow, mastodon)
 
         //create a thread that would be watching over the listener and would take only
         //the most recent data if no updates came from BDV for a little while
@@ -79,13 +80,15 @@ class BdvNotifier(
     /**
      * This class only registers timestamp of the most recently occurred relevant BDV/Mastodon event, it recognized
      * two types of events: events requiring scene camera repositioning, and events requiring scene content rebuild. */
-    internal inner class BdvEventsWatcher(val myBdvIamServicing: MamutViewBdv) : TransformListener<AffineTransform3D?>,
+    internal inner class BdvEventsWatcher(val thisBDV: MamutViewBdv, val mastodon: ProjectModel) :
+        TransformListener<AffineTransform3D?>,
         TimePointListener, GraphChangeListener, VertexPositionListener<Spot>, PropertyChangeListener, FocusListener,
         ColoringChangedListener, GraphListener<Spot, Link> {
         override fun graphChanged() {
             logger.debug("Called graphChanged")
             timeStampOfLastEvent = System.currentTimeMillis()
             isLastGraphEventValid = true
+            mastodon.model.setUndoPoint()
         }
         override fun vertexPositionChanged(vertex: Spot) {
             logger.debug("called vertexChanged")
@@ -120,6 +123,7 @@ class BdvNotifier(
         fun contentChanged() {
             timeStampOfLastEvent = System.currentTimeMillis()
             isLastContentEventValid = true
+            mastodon.model.setUndoPoint()
         }
 
         fun viewChanged() {
@@ -131,6 +135,7 @@ class BdvNotifier(
             timeStampOfLastEvent = System.currentTimeMillis()
             isLastVertexEventValid = true
             movedSpot = vertex
+            mastodon.model.setUndoPoint()
         }
 
         override fun graphRebuilt() {
