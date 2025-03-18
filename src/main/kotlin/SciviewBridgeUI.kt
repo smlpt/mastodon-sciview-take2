@@ -14,7 +14,7 @@ import javax.swing.event.ChangeListener
 class SciviewBridgeUI(controlledBridge: SciviewBridge, populateThisContainer: Container) {
     var controlledBridge: SciviewBridge?
     val controlsWindowPanel: Container
-    private val logger by lazyLogger()
+    private val logger by lazyLogger(System.getProperty("scenery.LogLevel", "info"))
 
     //int SOURCE_ID = 0;
     //int SOURCE_USED_RES_LEVEL = 0;

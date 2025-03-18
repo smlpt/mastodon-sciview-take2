@@ -12,7 +12,7 @@ import javax.swing.event.ChangeListener
 class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer: JPanel) {
     var controlledBridge: SciviewBridge?
     val windowPanel: JPanel
-    private val logger by lazyLogger()
+    private val logger by lazyLogger(System.getProperty("scenery.LogLevel", "info"))
 
     lateinit var intensityContrastSpinner: SpinnerModel
     lateinit var intensityShiftSpinner: SpinnerModel

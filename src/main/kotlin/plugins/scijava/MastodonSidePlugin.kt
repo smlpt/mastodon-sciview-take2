@@ -57,7 +57,7 @@ class MastodonSidePlugin : DynamicCommand() {
     // =============================================================================
     @Plugin(type = Command::class, name = "Mastodon to Sciview: Levels")
     class MastodonSidePluginResLevels : DynamicCommand() {
-        private val logger by lazyLogger()
+        private val logger by lazyLogger(System.getProperty("scenery.LogLevel", "info"))
 
         @Parameter
         private lateinit var sciViewService: SciViewService

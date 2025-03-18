@@ -4,14 +4,12 @@ import bdv.viewer.TimePointListener
 import bdv.viewer.TransformListener
 import graphics.scenery.utils.lazyLogger
 import net.imglib2.realtransform.AffineTransform3D
-import org.mastodon.graph.Edge
 import org.mastodon.graph.GraphChangeListener
 import org.mastodon.graph.GraphListener
 import org.mastodon.mamut.model.Link
 import org.mastodon.mamut.model.Spot
 import org.mastodon.mamut.views.bdv.MamutViewBdv
 import org.mastodon.model.FocusListener
-import org.mastodon.model.SelectionListener
 import org.mastodon.spatial.VertexPositionListener
 import org.mastodon.ui.coloring.ColoringModel.ColoringChangedListener
 import java.beans.PropertyChangeEvent
@@ -38,9 +36,9 @@ class BdvNotifier(
     mastodon: ProjectModel,
     bdvWindow: MamutViewBdv,
     // Don't trigger updates while a vertex is being moved from the sciview side
-    var lockVertexUpdates: Boolean = false
+    var lockUpdates: Boolean = false
 ) {
-    private val logger by lazyLogger()
+    private val logger by lazyLogger(System.getProperty("scenery.LogLevel", "info"))
     var movedSpot: Spot? = null
 
     init {
@@ -135,7 +133,6 @@ class BdvNotifier(
             timeStampOfLastEvent = System.currentTimeMillis()
             isLastVertexEventValid = true
             movedSpot = vertex
-            mastodon.model.setUndoPoint()
         }
 
         override fun graphRebuilt() {
@@ -198,7 +195,7 @@ class BdvNotifier(
                     if ((eventsSource.isLastContentEventValid || eventsSource.isLastVertexEventValid || eventsSource.isLastGraphEventValid
                         || eventsSource.isLastViewEventValid &&
                         System.currentTimeMillis() - eventsSource.timeStampOfLastEvent > updateInterval)
-                        && !lockVertexUpdates
+                        && !lockUpdates
                     ) {
                         if (eventsSource.isLastContentEventValid) {
                             logger.debug("$SERVICE_NAME: content event and silence detected -> processing it now")
