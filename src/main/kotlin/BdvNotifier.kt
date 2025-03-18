@@ -6,6 +6,7 @@ import graphics.scenery.utils.lazyLogger
 import net.imglib2.realtransform.AffineTransform3D
 import org.mastodon.graph.GraphChangeListener
 import org.mastodon.graph.GraphListener
+import org.mastodon.mamut.model.Link
 import org.mastodon.mamut.model.Spot
 import org.mastodon.mamut.views.bdv.MamutViewBdv
 import org.mastodon.model.FocusListener
@@ -35,14 +36,14 @@ class BdvNotifier(
     mastodon: ProjectModel,
     bdvWindow: MamutViewBdv,
     // Don't trigger updates while a vertex is being moved from the sciview side
-    var lockVertexUpdates: Boolean = false
+    var lockUpdates: Boolean = false
 ) {
-    private val logger by lazyLogger()
+    private val logger by lazyLogger(System.getProperty("scenery.LogLevel", "info"))
     var movedSpot: Spot? = null
 
     init {
         //create a listener for it (which will _immediately_ collect updates from BDV)
-        val bdvUpdateListener = BdvEventsWatcher(bdvWindow)
+        val bdvUpdateListener = BdvEventsWatcher(bdvWindow, mastodon)
 
         //create a thread that would be watching over the listener and would take only
         //the most recent data if no updates came from BDV for a little while
@@ -77,13 +78,15 @@ class BdvNotifier(
     /**
      * This class only registers timestamp of the most recently occurred relevant BDV/Mastodon event, it recognized
      * two types of events: events requiring scene camera repositioning, and events requiring scene content rebuild. */
-    internal inner class BdvEventsWatcher(val myBdvIamServicing: MamutViewBdv) : TransformListener<AffineTransform3D?>,
+    internal inner class BdvEventsWatcher(val thisBDV: MamutViewBdv, val mastodon: ProjectModel) :
+        TransformListener<AffineTransform3D?>,
         TimePointListener, GraphChangeListener, VertexPositionListener<Spot>, PropertyChangeListener, FocusListener,
-        ColoringChangedListener {
+        ColoringChangedListener, GraphListener<Spot, Link> {
         override fun graphChanged() {
             logger.debug("Called graphChanged")
             timeStampOfLastEvent = System.currentTimeMillis()
             isLastGraphEventValid = true
+            mastodon.model.setUndoPoint()
         }
         override fun vertexPositionChanged(vertex: Spot) {
             logger.debug("called vertexChanged")
@@ -118,6 +121,7 @@ class BdvNotifier(
         fun contentChanged() {
             timeStampOfLastEvent = System.currentTimeMillis()
             isLastContentEventValid = true
+            mastodon.model.setUndoPoint()
         }
 
         fun viewChanged() {
@@ -130,6 +134,27 @@ class BdvNotifier(
             isLastVertexEventValid = true
             movedSpot = vertex
         }
+
+        override fun graphRebuilt() {
+            TODO("Not yet implemented")
+        }
+
+        override fun edgeRemoved(e: Link?) {
+            TODO("Not yet implemented")
+        }
+
+        override fun edgeAdded(e: Link?) {
+            TODO("Not yet implemented")
+        }
+
+        override fun vertexRemoved(v: Spot?) {
+            TODO("Not yet implemented")
+        }
+
+        override fun vertexAdded(v: Spot?) {
+            TODO("Not yet implemented")
+        }
+
 
         var isLastContentEventValid = false
         var isLastVertexEventValid = false
@@ -170,7 +195,7 @@ class BdvNotifier(
                     if ((eventsSource.isLastContentEventValid || eventsSource.isLastVertexEventValid || eventsSource.isLastGraphEventValid
                         || eventsSource.isLastViewEventValid &&
                         System.currentTimeMillis() - eventsSource.timeStampOfLastEvent > updateInterval)
-                        && !lockVertexUpdates
+                        && !lockUpdates
                     ) {
                         if (eventsSource.isLastContentEventValid) {
                             logger.debug("$SERVICE_NAME: content event and silence detected -> processing it now")
@@ -188,7 +213,7 @@ class BdvNotifier(
                             vertexEventProcessor.invoke(movedSpot)
                         }
                         if (eventsSource.isLastGraphEventValid) {
-                            logger.info("$SERVICE_NAME: graph event and silence detected -> processing it now")
+                            logger.debug("$SERVICE_NAME: graph event and silence detected -> processing it now")
                             eventsSource.isLastGraphEventValid = false
                             graphEventProcessor.run()
                         }
