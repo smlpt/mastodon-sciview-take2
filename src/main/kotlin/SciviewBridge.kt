@@ -48,11 +48,12 @@ import javax.swing.JFrame
 import javax.swing.JPanel
 import kotlin.concurrent.thread
 import kotlin.math.*
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 
 class SciviewBridge: TimepointObserver {
-    private val logger by lazyLogger()
+    private val logger by lazyLogger(System.getProperty("scenery.LogLevel", "info"))
     //data source stuff
     val mastodon: ProjectModel
     var sourceID = 0
@@ -114,7 +115,7 @@ class SciviewBridge: TimepointObserver {
     private var moveInstanceVRInit: (Vector3f) -> Unit
     private var moveInstanceVRDrag: (Vector3f) -> Unit
     private var moveInstanceVREnd: (Vector3f) -> Unit
-    private var resetControllerTrack: () -> Unit
+//    private var resetControllerTrack: () -> Unit
 
     private val pluginActions: Actions
     private val predictSpotsAction: Action
@@ -237,24 +238,37 @@ class SciviewBridge: TimepointObserver {
         var currentControllerPos = Vector3f()
 
         // Three lambdas that are passed to the sciview class to handle the three drag behavior stages with controllers
-        moveInstanceVRInit = {
-            bdvNotifier?.lockVertexUpdates = true
-            currentControllerPos = sciviewToMastodonCoords(VRTracking.getCursorPosition())
-            selectedSpotInstance?.let {
-                val spot = sphereLinkNodes.findSpotFromInstance(selectedSpotInstance!!)
-                mastodon.model.graph.vertexRef().refTo(spot).incomingEdges().forEach {
-                    adjacentEdges.add(it)
-                }
-                mastodon.model.graph.vertexRef().refTo(spot).outgoingEdges().forEach {
-                    adjacentEdges.add(it)
+        moveInstanceVRInit = fun (pos: Vector3f) {
+
+            if (mastodon.selectionModel.selectedVertices == null) {
+                selectedSpotInstance = null
+                return
+            } else {
+                selectedSpotInstance?.let { inst ->
+                    logger.debug("selected spot instance is $inst")
+                    val spot = sphereLinkNodes.findSpotFromInstance(inst)
+                    val selectedTP = spot?.timepoint ?: -1
+                    if (selectedTP != volumeNode.currentTimepoint) {
+                        selectedSpotInstance = null
+                        logger.warn("Tried to move a spot that was outside the current timepoint. Aborting.")
+                        return
+                    } else {
+                        bdvNotifier?.lockUpdates = true
+                        currentControllerPos = sciviewToMastodonCoords(pos)
+                        spot?.let { s ->
+                            adjacentEdges.addAll(s.incomingEdges())
+                            adjacentEdges.addAll(s.outgoingEdges())
+                            logger.info("Moving ${s.incomingEdges().size()} incoming and ${s.outgoingEdges().size()} outgoing edges for spot $s.")
+                            logger.info("adjacentEdges are $adjacentEdges")
+                        }
+                    }
                 }
             }
         }
 
-        moveInstanceVRDrag = {
-            logger.debug("selected spot instance is $selectedSpotInstance")
+        moveInstanceVRDrag = fun (pos: Vector3f) {
             selectedSpotInstance?.let {
-                val newPos = sciviewToMastodonCoords(VRTracking.getCursorPosition())
+                val newPos = sciviewToMastodonCoords(pos)
                 val movement = newPos - currentControllerPos
                 it.spatial {
                     position += movement
@@ -265,15 +279,16 @@ class SciviewBridge: TimepointObserver {
             }
         }
 
-        moveInstanceVREnd = {
-            bdvNotifier?.lockVertexUpdates = false
+        moveInstanceVREnd = fun (pos: Vector3f) {
+            bdvNotifier?.lockUpdates = false
             sphereLinkNodes.showInstancedSpots(detachedDPP_showsLastTimepoint.timepoint,
                 detachedDPP_showsLastTimepoint.colorizer)
+            adjacentEdges.clear()
         }
 
-        resetControllerTrack = {
-            sphereLinkNodes.lastCreatedSpot = null
-        }
+//        resetControllerTrack = {
+//            sphereLinkNodes.lastCreatedSpot = null
+//        }
 
         pluginActions = mastodon.plugins.pluginActions
         predictSpotsAction = pluginActions.actionMap.get("[elephant] predict spots")
@@ -729,7 +744,7 @@ class SciviewBridge: TimepointObserver {
         private var edges: MutableList<Link> = ArrayList()
 
         override fun init(x: Int, y: Int) {
-            bdvNotifier?.lockVertexUpdates = true
+            bdvNotifier?.lockUpdates = true
             cam?.let { cam ->
                 val (rayStart, rayDir) = cam.screenPointToRay(x, y)
                 rayDir.normalize()
@@ -772,7 +787,7 @@ class SciviewBridge: TimepointObserver {
         }
 
         override fun end(x: Int, y: Int) {
-            bdvNotifier?.lockVertexUpdates = false
+            bdvNotifier?.lockUpdates = false
             sphereLinkNodes.showInstancedSpots(detachedDPP_showsLastTimepoint.timepoint,
                 detachedDPP_showsLastTimepoint.colorizer)
         }
@@ -799,8 +814,9 @@ class SciviewBridge: TimepointObserver {
             VRTracking.spotMoveInitCallback = moveInstanceVRInit
             VRTracking.spotMoveDragCallback = moveInstanceVRDrag
             VRTracking.spotMoveEndCallback = moveInstanceVREnd
-            VRTracking.spotLinkCallback = sphereLinkNodes.linkSelectedToExistingSpot
-            VRTracking.resetTrackingCallback = resetControllerTrack
+            VRTracking.spotLinkCallback = sphereLinkNodes.mergeSelectedToClosestSpot
+            VRTracking.singleLinkPreviewCallback = sphereLinkNodes.addSingleLinkPreview
+//            VRTracking.resetTrackingCallback = resetControllerTrack
             VRTracking.rebuildGeometryCallback = {
                 logger.debug("Called rebuildGeometryCallback")
                 sphereLinkNodes.showInstancedSpots(
@@ -818,9 +834,15 @@ class SciviewBridge: TimepointObserver {
             VRTracking.neighborLinkingCallback = neighborLinkingCallback
             VRTracking.stageSpotsCallback = stageSpotsCallback
 
+            var timeSinceUndo = TimeSource.Monotonic.markNow()
             VRTracking.mastodonUndoCallback = {
-                mastodon.model.undo()
-                logger.info("Undid last change.")
+                val now = TimeSource.Monotonic.markNow()
+                if (now.minus(timeSinceUndo) > 0.5.seconds) {
+                    mastodon.model.undo()
+                    logger.info("Undid last change.")
+                    timeSinceUndo = now
+                }
+
             }
 
             // register the bridge as an observer to the timepoint changes by the user in VR,
