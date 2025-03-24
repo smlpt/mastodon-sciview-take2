@@ -8,6 +8,9 @@ import graphics.scenery.primitives.Arrow
 import graphics.scenery.primitives.Cylinder
 import graphics.scenery.utils.extensions.*
 import graphics.scenery.utils.lazyLogger
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import net.imglib2.display.ColorTable
 import org.apache.commons.math3.linear.Array2DRowRealMatrix
 import org.apache.commons.math3.linear.EigenDecomposition
@@ -42,7 +45,7 @@ class SphereLinkNodes(
     val linkParentNode: Node
 ) {
 
-    private val logger by lazyLogger(System.getProperty("scenery.LogLevel", "info"))
+    private val logger by lazyLogger("debug")
     var sphereScaleFactor = 1f
     var linkScaleFactor = 1f
     var DEFAULT_COLOR = 0x00FFFFFF
@@ -87,6 +90,42 @@ class SphereLinkNodes(
      * - [LUT] uses a colormap, defaults to Fire.lut
      * - [SPOT] uses the spot color from the connected spot */
     enum class ColorMode { LUT, SPOT }
+
+    private fun addMoreInstances(
+        mainInstance: InstancedNode,
+        number: Int = 10000,
+        pool: MutableList<InstancedNode.Instance>
+    ) {
+        val tStart = TimeSource.Monotonic.markNow()
+
+        runBlocking {
+            val batchSize = 3000
+            val jobs = mutableListOf<Job>()
+
+            for (batchStart in 0 until number step batchSize) {
+                val batchEnd = minOf(batchStart + batchSize, number)
+                val job = launch {
+                    val localInstances = ArrayList<InstancedNode.Instance>(batchEnd - batchStart)
+                    var inst: InstancedNode.Instance
+                    for (i in batchStart until batchEnd) {
+                        inst = mainInstance.addInstance()
+                        inst.parent = mainInstance.parent
+                        localInstances.add(inst)
+                    }
+                    // Add all instances from this batch to the pool at once
+                    synchronized(pool) {
+                        pool.addAll(localInstances)
+                    }
+                }
+                jobs.add(job)
+            }
+
+            // Wait for all jobs to complete
+            jobs.forEach { it.join() }
+        }
+
+        logger.info("adding $number ${mainInstance.name} instances took ${TimeSource.Monotonic.markNow()-tStart}.")
+    }
 
     /** Shows or initializes the main spot instance, publishes it to the scene and populates it with instances from the current time-point. */
     fun showInstancedSpots(
@@ -183,7 +222,7 @@ class SphereLinkNodes(
             spotPool[i++].visible = false
         }
         val tElapsed = TimeSource.Monotonic.markNow() - tStart
-        logger.debug("Spot updates took $tElapsed")
+        logger.info("Spot updates took $tElapsed")
     }
 
     private fun computeEigen(covariance: Array2DRowRealMatrix): Pair<DoubleArray, RealMatrix> {
@@ -553,10 +592,14 @@ class SphereLinkNodes(
 
     /** Takes a list of Mastodon [Link]s, tries to find their corresponding instances and updates their transforms. */
     fun updateLinkTransforms(edges: MutableList<Link>) {
+        val sourceRef = mastodonData.model.graph.vertexRef()
+        val targetRef = mastodonData.model.graph.vertexRef()
         for (edge in edges) {
             findInstanceFromLink(edge)?.let {
+                sourceRef.refTo(edge.source)
+                targetRef.refTo(edge.target)
                 logger.info("updating edge $edge")
-                setLinkTransform(edge.source, edge.target, it)
+                setLinkTransform(sourceRef, targetRef, it)
             }
         }
     }
@@ -700,12 +743,12 @@ class SphereLinkNodes(
                 "Mastodon provides ${mastodonData.model.graph.edges().size} links.")
         val end = TimeSource.Monotonic.markNow()
 
-        logger.debug("Edge traversel took ${end - start}.")
+        logger.info("Edge traversel took ${end - start}.")
         // first update the link colors without providing a colorizer, because no BDV window has been opened yet
         updateLinkColors(colorizer)
 
         val tElapsed = TimeSource.Monotonic.markNow() - tStart
-        logger.debug("Total link updates (with coloring) took $tElapsed")
+        logger.info("Total link updates (with coloring) took $tElapsed")
     }
 
     /** Takes a cylinder instance [inst] and two spots, [from] and [to], and positions the cylinder between them.
