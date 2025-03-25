@@ -1,13 +1,18 @@
 # The mangling of pixels before they are displayed in sciview
 
+> Note: part of the volume transformations described here are currently non-functional,
+> because I need to figure out how update the data in real-time even for larger datasets.
+
 What originally was a technical necessity, the full copy of the relevant pixel data (that is, pixels
 from the chosen resolution for the currently displayed time point) into one re-used memory
 allows us to modify the data (pixels) before they are displayed.
-This enabled us to implement *gamma correction* as well as *track colors in-painting*.
+This enabled us to implement *gamma correction* and other value transformations.
 
 An illustrative screenshot of the [Mastodon freely available example project with pixel data](https://github.com/mastodon-sc/mastodon-example-data)
 could look like this:
 ![A screenshot of the Mastodon public demo data shown with this project](example_data.png)
+
+> Note: volume coloring used to be a feature, but was turned off for the time being and converted to a backlog feature due to its increased memory constrains.
 
 ## Gamma correction, and more...
 First we need to understand what happens to pixel values on their way to the screen:
@@ -44,26 +49,4 @@ of the slider itself, press `Ctrl` and place mouse pointer to the right half of 
 left mouse button and keep holding it while moving the mouse pointer left-right to adjust the higher/right
 side bound of the slider. Using left half of the slider area will control the lower/left bound of the slider.
 
-## The colors in-painting in more detail
-The in-painting introduces color to otherwise gray image ('cause the image was showing a single channel) by
-creating disproportion to the pixel values in the Red, Green and Blue sciview volumes. So, if a pixel is to be
-*colorized* with R,G,B, each being from the interval <0 ; 1>, it's simply multiplied with these components.
 
-However, if the R,G,B triplet shall represent a dim color, that is, a color with rather low values in all three
-components, this would basically turned the colorized pixel to a very faint, hardly visible one.
-The option "Enable enhancing of spot colors" modifies the R,G,B to the brightest possible, same color (hue).
-It prevents (to a limited extent) the colorized pixels to became very faint.
-
-Be it as it may, the R,G,B components are inevitably always lower-or-equal than 1.0.
-So multiplying the pixel values with them inevitably decreases the pixel brightness.
-In order to counter balance this effect, "nominal intensity" for the colorized pixels is considered.
-Technically, it multiplies the pixels with a factor of "nominal intensity" / "not_above" in an attempt
-to elevate the brightest pixels (those at values of "not_above") to the "nominal intensity".
-It is therefore desirable to set the "nominal intensity" (much) higher than the "not_above" threshold.
-
-The color is then taken from Mastodon data. In particular, from the "synced Mastodon BDV" window and there
-currently enabled tag set (via the BDV -> View -> Coloring -> some_color_scheme).
-
-When a color is decided for a *SPOT*, it's radius is multiplied with "spots radii with" factor to define
-a spherical region around that *SPOT*'s centre and all pixels within this region are colorized.
-If this factor is set very high, it may be colorizing even nearby pixels that semantically belong to another cell (tracked object).
