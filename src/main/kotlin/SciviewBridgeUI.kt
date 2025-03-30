@@ -14,7 +14,7 @@ import javax.swing.event.ChangeListener
 class SciviewBridgeUI(controlledBridge: SciviewBridge, populateThisContainer: Container) {
     var controlledBridge: SciviewBridge?
     val controlsWindowPanel: Container
-    private val logger by lazyLogger()
+    private val logger by lazyLogger(System.getProperty("scenery.LogLevel", "info"))
 
     //int SOURCE_ID = 0;
     //int SOURCE_USED_RES_LEVEL = 0;
@@ -155,7 +155,7 @@ class SciviewBridgeUI(controlledBridge: SciviewBridge, populateThisContainer: Co
             linkRangeBackwards,
             {
                 f: Float -> bridge.sphereLinkNodes.linkBackwardRange = f.toInt()
-                bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastTpWhenVolumeWasUpdated)
+                bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastUpdatedSciviewTP)
             },
             c)
 
@@ -168,7 +168,7 @@ class SciviewBridgeUI(controlledBridge: SciviewBridge, populateThisContainer: Co
             linkRangeForwards,
             {
                 f: Float -> bridge.sphereLinkNodes.linkForwardRange = f.toInt()
-                bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastTpWhenVolumeWasUpdated)
+                bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastUpdatedSciviewTP)
             },
             c
         )
@@ -248,9 +248,9 @@ class SciviewBridgeUI(controlledBridge: SciviewBridge, populateThisContainer: Co
         c.gridy++
 
         startEyeTracking = JButton("Start Eye Tracking")
-        startEyeTracking.addActionListener { bridge.launchEyeTracking() }
+        startEyeTracking.addActionListener { bridge.launchVR() }
         stopEyeTracking = JButton("Stop Eye Tracking")
-        stopEyeTracking.addActionListener { bridge.stopEyeTracking() }
+        stopEyeTracking.addActionListener { bridge.stopVR() }
 
         val trackingBtnPlaceholder = JPanel()
         controlsWindowPanel.add(trackingBtnPlaceholder, c)
@@ -361,7 +361,7 @@ class SciviewBridgeUI(controlledBridge: SciviewBridge, populateThisContainer: Co
             val bridge = this@SciviewBridgeUI.controlledBridge ?: throw IllegalStateException("Bridge is null.")
             val s = changeEvent.source as SpinnerNumberModel
             pushChangeToHere.accept(s.number.toFloat())
-            if (bridge.updateVolAutomatically) bridge.updateVolumeTP()
+            if (bridge.updateVolAutomatically) bridge.updateSciviewTPfromBDV()
         }
     }
 

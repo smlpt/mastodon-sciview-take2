@@ -12,7 +12,7 @@ import javax.swing.event.ChangeListener
 class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer: JPanel) {
     var controlledBridge: SciviewBridge?
     val windowPanel: JPanel
-    private val logger by lazyLogger()
+    private val logger by lazyLogger(System.getProperty("scenery.LogLevel", "info"))
 
     lateinit var intensityContrastSpinner: SpinnerModel
     lateinit var intensityShiftSpinner: SpinnerModel
@@ -25,12 +25,14 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
     lateinit var visToggleTracks: JButton
     lateinit var linkRangeBackwards: SpinnerModel
     lateinit var linkRangeForwards: SpinnerModel
+    lateinit var spotScaleFactor: SpinnerModel
     lateinit var autoIntensityBtn: JToggleButton
     lateinit var lockGroupHandler: GroupLocksHandling
     lateinit var linkColorSelector: JComboBox<String>
     lateinit var volumeColorSelector: JComboBox<String>
-    lateinit var startEyeTracking: JButton
-    lateinit var stopEyeTracking: JButton
+    lateinit var startVR: JButton
+    lateinit var stopVR: JButton
+    lateinit var eyeTrackingToggle: JCheckBox
 
     private fun populatePane() {
         val bridge = this.controlledBridge ?: throw IllegalStateException("The passed bridge cannot be null.")
@@ -97,7 +99,7 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
             SpinnerNumberModel(bridge.mastodon.maxTimepoint, 0, bridge.mastodon.maxTimepoint, 1)
         ) { value ->
             bridge.sphereLinkNodes.linkBackwardRange = value.toInt()
-            bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastTpWhenVolumeWasUpdated)
+            bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastUpdatedSciviewTP)
         }
 
         linkRangeForwards = addLabeledSpinner(
@@ -105,7 +107,15 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
             SpinnerNumberModel(bridge.mastodon.maxTimepoint, 0, bridge.mastodon.maxTimepoint, 1)
         ) { value ->
             bridge.sphereLinkNodes.linkForwardRange = value.toInt()
-            bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastTpWhenVolumeWasUpdated)
+            bridge.sphereLinkNodes.updateLinkVisibility(bridge.lastUpdatedSciviewTP)
+        }
+
+        spotScaleFactor = addLabeledSpinner(
+            "Spot scale factor",
+            SpinnerNumberModel(1f, 0.1f, 10f, 0.1f)
+        ) { value ->
+            bridge.sphereLinkNodes.sphereScaleFactor = value.toFloat()
+            bridge.sphereLinkNodes.updateSphereScales()
         }
 
         // Adding dropdowns for link LUTs and volume colors
@@ -152,11 +162,14 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
         windowPanel.add(visButtons, "span, growx")
 
         // Eye Tracking
-        startEyeTracking = JButton("Start Eye Tracking").apply { addActionListener { bridge.launchEyeTracking() } }
-        stopEyeTracking = JButton("Stop Eye Tracking").apply { addActionListener { bridge.stopEyeTracking() } }
+        startVR = JButton("Start VR").apply { addActionListener { bridge.launchVR(eyeTrackingToggle.isSelected) } }
+        stopVR = JButton("Stop VR").apply { addActionListener { bridge.stopVR() } }
+        eyeTrackingToggle = JCheckBox("Launch with Eye Tracking")
+        eyeTrackingToggle.setSelected(true)
         windowPanel.add(JPanel(MigLayout("fillx, insets 0")).apply {
-            add(startEyeTracking, "growx")
-            add(stopEyeTracking, "growx")
+            add(startVR, "growx")
+            add(stopVR, "growx")
+            add(eyeTrackingToggle, "dock east, gapleft 8px")
         }, "span, growx")
 
         // Close Button
@@ -245,19 +258,15 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
         intensityShiftSpinner.value = bridge.intensity.shift
         intensityClampTopSpinner.value = bridge.intensity.clampTop
         intensityGammaSpinner.value = bridge.intensity.gamma
+        spotScaleFactor.value = bridge.sphereLinkNodes.sphereScaleFactor
         val upperValBackup = bridge.intensity.rangeMax
 
-        intensityRangeSlider
-            .rangeSlider
-            .value = bridge.intensity.rangeMin.toInt()
+        intensityRangeSlider.rangeSlider.value = bridge.intensity.rangeMin.toInt()
         //NB: this triggers a "value changed listener" which updates _both_ the value and upperValue,
         //    which resets the value with the new one (so no change in the end) but clears upperValue
         //    to the value the dialog was left with (forgets the new upperValue effectively)
         bridge.intensity.rangeMax = upperValBackup
-        intensityRangeSlider
-            .rangeSlider
-            .upperValue = bridge.intensity.rangeMax.toInt()
-
+        intensityRangeSlider.rangeSlider.upperValue = bridge.intensity.rangeMax.toInt()
         autoIntensityBtn.isSelected = bridge.isVolumeAutoAdjust
         bridge.updateVolAutomatically = updVolAutoBackup
     }

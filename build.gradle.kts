@@ -10,20 +10,21 @@ repositories {
     mavenCentral()
     maven("https://maven.scijava.org/content/groups/public")
     maven("https://jitpack.io")
+    mavenLocal()
 }
 
 dependencies {
     implementation(platform("org.scijava:pom-scijava:37.0.0"))
-    implementation("org.yaml:snakeyaml:[1.29, 1.33]!!")
+    implementation("org.yaml:snakeyaml:2.3")
 
     implementation("net.imagej:imagej")
 
     //api("sc.iview:sciview")
     implementation("sc.iview:sciview")
 
-    implementation("org.slf4j:slf4j-simple:1.7.36")
+    implementation("org.slf4j:slf4j-simple:2.0.16")
 
-    implementation("com.github.elephant-track:elephant-client:0.5.0")
+    implementation("org.elephant:elephant:0.7.0")
 
     implementation("com.fasterxml.jackson.core:jackson-databind:2.16.1")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.16.1")
@@ -36,6 +37,8 @@ dependencies {
     kapt("org.scijava:scijava-common:$scijavaCommonVersion") {
         exclude("org.lwjgl")
     }
+
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 }
 
 tasks.register("copyDependencies", Copy::class) {
