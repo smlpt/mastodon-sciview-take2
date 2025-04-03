@@ -388,6 +388,7 @@ class SphereLinkNodes(
         return if (results.isNotEmpty()) {
             results.entries.first().value.instance
         } else {
+            logger.info("Couldnt find an instance for ${link.internalPoolIndex}")
             null
         }
     }
@@ -818,8 +819,9 @@ class SphereLinkNodes(
     }
 
     /** Passed to EyeTracking to send a list of vertices from sciview to Mastodon.
-     * If the boolean is true, the coordinates are in world space and will be converted to local Mastodon space first. */
-    val addTrackToMastodon: (List<Pair<Vector3f, SpineGraphVertex>>, Boolean) -> Unit = { list, isWorldSpace ->
+     * If the boolean is true, the coordinates are in world space and will be converted to local Mastodon space first.
+     * A spot is passed when the user wants to start from an existing spot (aka clicked on it for starting the track). */
+    val addTrackToMastodon = fun(list: List<Pair<Vector3f, SpineGraphVertex>>, isWorldSpace: Boolean, startWithExisting: Spot?) {
         logger.debug("got this track list: ${list.joinToString { pair ->
             "${pair.second}" } }")
         val graph = mastodonData.model.graph
@@ -827,10 +829,15 @@ class SphereLinkNodes(
         var prevVertex = graph.vertexRef()
         bridge.bdvNotifier?.lockUpdates = true
         list.forEachIndexed { index, (pos, spineVertex) ->
-            val v = graph.addVertex()
-            val localPos = if (isWorldSpace) bridge.sciviewToMastodonCoords(pos) else pos
-            v.init(spineVertex.timepoint, localPos.toDoubleArray(), 10.0)
-            logger.debug("added $v")
+            val v: Spot
+            if (index == 0 && startWithExisting != null) {
+                v = startWithExisting
+            } else {
+                v = graph.addVertex()
+                val localPos = if (isWorldSpace) bridge.sciviewToMastodonCoords(pos) else pos
+                v.init(spineVertex.timepoint, localPos.toDoubleArray(), 10.0)
+                logger.debug("added $v")
+            }
             // start adding edges once the first vertex was added
             if (index > 0) {
                 val e = graph.addEdge(prevVertex, v)
