@@ -17,6 +17,7 @@ import graphics.scenery.volumes.BufferedVolume
 import graphics.scenery.volumes.RAIVolume
 import graphics.scenery.volumes.TransferFunction
 import graphics.scenery.volumes.Volume
+import kotlinx.coroutines.runBlocking
 import net.imglib2.RandomAccessibleInterval
 import net.imglib2.loops.LoopBuilder
 import net.imglib2.realtransform.AffineTransform3D
@@ -158,7 +159,6 @@ class SciviewBridge: TimepointObserver {
             if (l.name.startsWith("headli") && l is PointLight) adjustHeadLight(l)
         }
         sciviewWin.addNode(AmbientLight(0.05f, Vector3f(1f, 1f, 1f)))
-//        sciviewWin.camera?.spatial()?.move(30f, 2)
 
         //add "root" with data axes
         axesParent = constructDataAxes()
@@ -179,7 +179,7 @@ class SciviewBridge: TimepointObserver {
             volumeDims[2].toFloat() / volumeNumPixels[2].toFloat()
         )
         logger.info("downscale factors: ${volumeDownscale[0]} x, ${volumeDownscale[1]} x, ${volumeDownscale[2]} x")
-        logger.info("number of mipmap levels: ${spimSource.numMipmapLevels}")
+        logger.info("number of mipmap levels: ${spimSource.numMipmapLevels}, available timepoints: ${mastodon.sharedBdvData.numTimepoints}")
 
         // get 3D+t volume data from Mastodon
         sac = mastodon.sharedBdvData.sources[this.sourceID]
@@ -191,6 +191,7 @@ class SciviewBridge: TimepointObserver {
             floatArrayOf(1f, 1f, 1f)
         )
         logger.info("current mipmap range: ${volumeNode.multiResolutionLevelLimits}")
+        setMipmapLevel(this.sourceResLevel.toFloat())
 
         setVolumeRanges(
             volumeNode,
@@ -204,19 +205,17 @@ class SciviewBridge: TimepointObserver {
 
         centerCameraOnVolume()
 
-        val tpWidgetPos = Vector3f(
-             0f,
-            mastodonToSciviewCoords(volumeNode.boundingBox?.max ?: Vector3f(100f)).x,
-            0f
-        ).times(0.8f)
-        volumeTPWidget.text = volumeNode.currentTimepoint.toString()
-        volumeTPWidget.name = "Volume Timepoint Widget"
-        volumeTPWidget.spatial {
-            scale = Vector3f(0.1f)
-            position = tpWidgetPos
-        }
+//        val tpWidgetPos = volumeNode.boundingBox?.max ?: Vector3f(0f)
+//        tpWidgetPos.mul(.5f, 1.2f, 0.5f)
 
-        sciviewWin.addNode(volumeTPWidget, activePublish = false)
+//        volumeTPWidget.text = volumeNode.currentTimepoint.toString()
+//        volumeTPWidget.name = "Volume Timepoint Widget"
+//        volumeTPWidget.spatial {
+//            scale = Vector3f(10f, 10f, -10f)
+//            position = Vector3f(0f)
+//        }
+//
+//        sciviewWin.addNode(volumeTPWidget, activePublish = false, parent = volumeNode)
 
         logger.info("volume node scale is ${volumeNode.spatialOrNull()?.scale}")
 
@@ -259,7 +258,7 @@ class SciviewBridge: TimepointObserver {
                             adjacentEdges.addAll(s.incomingEdges())
                             adjacentEdges.addAll(s.outgoingEdges())
                             logger.info("Moving ${s.incomingEdges().size()} incoming and ${s.outgoingEdges().size()} outgoing edges for spot $s.")
-                            logger.info("adjacentEdges are $adjacentEdges")
+                            logger.info("adjacentEdges are ${adjacentEdges.map { it.internalPoolIndex }.joinToString(", ")}")
                         }
                     }
                 }
@@ -423,7 +422,7 @@ class SciviewBridge: TimepointObserver {
             it.maxDisplayRange = displayRangeMax
             val tf = TransferFunction()
             tf.addControlPoint(0f, 0f)
-            tf.addControlPoint(1f, 0.7f)
+            tf.addControlPoint(1f, 0.5f)
             it.transferFunction = tf
             //make Bounding Box Grid invisible
             it.children.forEach { n: Node -> n.visible = false }
@@ -593,7 +592,7 @@ class SciviewBridge: TimepointObserver {
     fun updateSciviewContent(forThisBdv: DisplayParamsProvider) {
         logger.debug("Called updateSciviewContent")
         updateSciviewTPfromBDV(forThisBdv)
-        volumeTPWidget.text = volumeNode.currentTimepoint.toString()
+//        volumeTPWidget.text = volumeNode.currentTimepoint.toString()
         sphereLinkNodes.showInstancedSpots(forThisBdv.timepoint, forThisBdv.colorizer)
         sphereLinkNodes.updateLinkVisibility(forThisBdv.timepoint)
         sphereLinkNodes.updateLinkColors(forThisBdv.colorizer)
@@ -602,7 +601,11 @@ class SciviewBridge: TimepointObserver {
     /** Takes a timepoint and updates the current BDV window's time accordingly. */
     fun updateBDV_TPfromSciview(tp: Int) {
         logger.debug("Updated BDV timepoint from sciview")
-        (bdvWinParamsProvider as DPP_BdvAdapter).bdv.viewerPanelMamut.state().currentTimepoint = tp
+        if (bdvWinParamsProvider != null) {
+            (bdvWinParamsProvider as DPP_BdvAdapter).bdv.viewerPanelMamut.state().currentTimepoint = tp
+        } else {
+            logger.warn("BDV window was likely not initialized, can't synchronize sciview timepoint to BDV window!")
+        }
     }
 
     var lastUpdatedSciviewTP = 0
@@ -668,6 +671,7 @@ class SciviewBridge: TimepointObserver {
         // if we play backwards, start with the highest TP once we reach below 0, otherwise play forward and wrap at maxTP
         detachedDPP_withOwnTime.timepoint = if (timepoint < 0) maxTP else timepoint % maxTP
         updateSciviewContent(detachedDPP_withOwnTime)
+        VRTracking.volumeTPWidget.text = detachedDPP_withOwnTime.timepoint.toString()
     }
 
     private fun registerKeyboardHandlers() {
