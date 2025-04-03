@@ -23,6 +23,7 @@ import org.joml.Vector4f
 import org.mastodon.mamut.ProjectModel
 import org.mastodon.mamut.SciviewBridge
 import org.mastodon.mamut.model.Link
+import org.mastodon.mamut.model.LinkPool
 import org.mastodon.mamut.model.Spot
 import org.mastodon.spatial.SpatialIndex
 import org.mastodon.ui.coloring.GraphColorGenerator
@@ -34,6 +35,7 @@ import java.awt.Color
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.ArrayList
+import kotlin.math.max
 import kotlin.math.sqrt
 import kotlin.time.TimeSource
 
@@ -149,8 +151,9 @@ class SphereLinkNodes(
             // Instanced properties should be aligned to 4*32bit boundaries, hence the use of Vector4f instead of Vector3f here
             mainSpot.instancedProperties["Color"] = { Vector4f(1f) }
             var inst: InstancedNode.Instance
+            val maxSpotCount = mastodonData.model.spatioTemporalIndex.getSpatialIndex(mastodonData.maxTimepoint).size()
             // initialize the whole pool with instances once
-            for (i in 0..<10000) {
+            for (i in 0..< (maxSpotCount * 1.2).toInt() ) {
                 inst = mainSpot.addInstance()
                 inst.parent = sphereParentNode
                 spotPool.add(inst)
@@ -740,6 +743,12 @@ class SphereLinkNodes(
         while (i < linkPool.size) {
             linkPool[i++].visible = false
         }
+
+        linkPreviewList.forEach { link ->
+
+            setLinkTransform(link.from, link.to, link.instance)
+        }
+
         logger.info("${links.size} links in the hashmap, ${linkPool.size} link instances in the pool. " +
                 "Mastodon provides ${mastodonData.model.graph.edges().size} links.")
         val end = TimeSource.Monotonic.markNow()
@@ -848,6 +857,8 @@ class SphereLinkNodes(
         }
         bridge.bdvNotifier?.lockUpdates = false
 //        mastodonData.model.graph.notifyGraphChanged()
+        // Once we send the new track to Mastodon, we can assume we no longer need the previews and can clear them
+        linkPreviewList.clear()
     }
 
     /** Lambda that is passed to sciview to send individual spots from sciview to Mastodon
@@ -876,16 +887,23 @@ class SphereLinkNodes(
         }
     }
 
+    data class LinkPreview( val instance: InstancedNode.Instance, val from: Vector3f, val to: Vector3f )
+
+    val linkPreviewList = mutableListOf<LinkPreview>()
+
     /** Adds a single link instance to the scene for visual feedback during controller based tracking.
      * No data are sent to Mastodon! */
     val addSingleLinkPreview: (from: Vector3f, to: Vector3f) -> Unit = { from, to ->
         mainLinkInstance?.let {
             val inst = it.addInstance()
             val color = Vector4f(0.65f, 1f, 0.22f, 1f)
+            val localFrom = bridge.sciviewToMastodonCoords(from)
+            val localTo = bridge.sciviewToMastodonCoords(to)
             inst.instancedProperties["Color"] = { color }
             inst.parent = linkParentNode
-            linkPool.add(inst)
-            setLinkTransform(bridge.sciviewToMastodonCoords(from), bridge.sciviewToMastodonCoords(to), inst)
+//            linkPool.add(inst)
+            linkPreviewList.add(LinkPreview(inst, localFrom, localTo))
+            setLinkTransform(localFrom, localTo, inst)
         }
         logger.debug("Added a new preview link to the pool")
     }
