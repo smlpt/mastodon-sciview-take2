@@ -17,7 +17,6 @@ import graphics.scenery.volumes.BufferedVolume
 import graphics.scenery.volumes.RAIVolume
 import graphics.scenery.volumes.TransferFunction
 import graphics.scenery.volumes.Volume
-import kotlinx.coroutines.runBlocking
 import net.imglib2.RandomAccessibleInterval
 import net.imglib2.loops.LoopBuilder
 import net.imglib2.realtransform.AffineTransform3D
@@ -819,7 +818,8 @@ class SciviewBridge: TimepointObserver {
             VRTracking.spotMoveDragCallback = moveInstanceVRDrag
             VRTracking.spotMoveEndCallback = moveInstanceVREnd
             VRTracking.spotLinkCallback = sphereLinkNodes.mergeSelectedToClosestSpot
-            VRTracking.singleLinkPreviewCallback = sphereLinkNodes.addSingleLinkPreview
+            VRTracking.singleLinkTrackedCallback = sphereLinkNodes.addTrackedPoint
+            VRTracking.toggleTrackingPreviewCallback = sphereLinkNodes.toggleLinkPreviews
 //            VRTracking.resetTrackingCallback = resetControllerTrack
             VRTracking.rebuildGeometryCallback = {
                 logger.debug("Called rebuildGeometryCallback")

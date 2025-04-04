@@ -23,7 +23,6 @@ import org.joml.Vector4f
 import org.mastodon.mamut.ProjectModel
 import org.mastodon.mamut.SciviewBridge
 import org.mastodon.mamut.model.Link
-import org.mastodon.mamut.model.LinkPool
 import org.mastodon.mamut.model.Spot
 import org.mastodon.spatial.SpatialIndex
 import org.mastodon.ui.coloring.GraphColorGenerator
@@ -35,7 +34,6 @@ import java.awt.Color
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.ArrayList
-import kotlin.math.max
 import kotlin.math.sqrt
 import kotlin.time.TimeSource
 
@@ -834,17 +832,16 @@ class SphereLinkNodes(
         logger.debug("got this track list: ${list.joinToString { pair ->
             "${pair.second}" } }")
         val graph = mastodonData.model.graph
-
         var prevVertex = graph.vertexRef()
         bridge.bdvNotifier?.lockUpdates = true
-        list.forEachIndexed { index, (pos, spineVertex) ->
+        trackPointList.forEachIndexed { index, (pos, tp) ->
             val v: Spot
             if (index == 0 && startWithExisting != null) {
                 v = startWithExisting
             } else {
                 v = graph.addVertex()
-                val localPos = if (isWorldSpace) bridge.sciviewToMastodonCoords(pos) else pos
-                v.init(spineVertex.timepoint, localPos.toDoubleArray(), 10.0)
+//                val localPos = if (isWorldSpace) bridge.sciviewToMastodonCoords(pos) else pos
+                v.init(tp, pos.toDoubleArray(), 10.0)
                 logger.debug("added $v")
             }
             // start adding edges once the first vertex was added
@@ -858,7 +855,11 @@ class SphereLinkNodes(
         bridge.bdvNotifier?.lockUpdates = false
 //        mastodonData.model.graph.notifyGraphChanged()
         // Once we send the new track to Mastodon, we can assume we no longer need the previews and can clear them
+        logger.info("instances before deletion: ${mainLinkInstance?.instances?.size}")
+        mainLinkInstance?.instances?.removeAll(linkPreviewList.map { it.instance }.toSet())
+        logger.info("instances after deletion: ${mainLinkInstance?.instances?.size}")
         linkPreviewList.clear()
+        trackPointList.clear()
     }
 
     /** Lambda that is passed to sciview to send individual spots from sciview to Mastodon
@@ -887,25 +888,39 @@ class SphereLinkNodes(
         }
     }
 
-    data class LinkPreview( val instance: InstancedNode.Instance, val from: Vector3f, val to: Vector3f )
+    data class LinkPreview( val instance: InstancedNode.Instance, val from: Vector3f, val to: Vector3f , val tp: Int)
+
+    val trackPointList = mutableListOf<Pair<Vector3f, Int>>()
 
     val linkPreviewList = mutableListOf<LinkPreview>()
 
     /** Adds a single link instance to the scene for visual feedback during controller based tracking.
-     * No data are sent to Mastodon! */
-    val addSingleLinkPreview: (from: Vector3f, to: Vector3f) -> Unit = { from, to ->
-        mainLinkInstance?.let {
-            val inst = it.addInstance()
+     * No data are sent to Mastodon yet, but we keep track of the points in local space in a [trackPointList]. */
+    val addTrackedPoint: (pos: Vector3f, tp: Int, preview: Boolean) -> Unit = { pos, tp, preview ->
+        val localPos = bridge.sciviewToMastodonCoords(pos)
+        // Once we tracked the first point, we can start adding link previews
+        if (trackPointList.size > 0 && mainLinkInstance != null) {
+            val inst = mainLinkInstance!!.addInstance()
             val color = Vector4f(0.65f, 1f, 0.22f, 1f)
-            val localFrom = bridge.sciviewToMastodonCoords(from)
-            val localTo = bridge.sciviewToMastodonCoords(to)
+//            val localFrom = bridge.sciviewToMastodonCoords(from)
             inst.instancedProperties["Color"] = { color }
+            inst.name = "${tp}_${localPos}"
             inst.parent = linkParentNode
-//            linkPool.add(inst)
-            linkPreviewList.add(LinkPreview(inst, localFrom, localTo))
-            setLinkTransform(localFrom, localTo, inst)
+            inst.visible = preview
+            setLinkTransform(trackPointList.last().first, localPos, inst)
+            val link = LinkPreview(inst, trackPointList.last().first, localPos, tp)
+            linkPreviewList.add(link)
+            logger.info("Added a new preview link from ${link.from} to ${link.to}. Visibility is $preview")
         }
-        logger.debug("Added a new preview link to the pool")
+        trackPointList.add(localPos to tp)
+    }
+
+    /** Toggle the preview links that are rendered during controller tracking */
+    val toggleLinkPreviews: (state: Boolean) -> Unit = { state ->
+        linkPreviewList.forEach {
+            it.instance.visible = state
+            logger.debug("set instance ${it.instance.name} to $state")
+        }
     }
 
     val linkSize = 2.0
