@@ -90,7 +90,7 @@ class MastodonPlugin : AbstractContextual(), MamutPlugin {
         private val menuTexts: MutableMap<String, String> = HashMap()
 
         init {
-            menuTexts[OPEN_SCIVIEW] = "New sciview"
+            menuTexts[OPEN_SCIVIEW] = "New manvr3d window"
         }
     }
 }
