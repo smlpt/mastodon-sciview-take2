@@ -120,7 +120,7 @@ class SciviewBridgeUI(controlledBridge: SciviewBridge, populateThisContainer: Co
                 // update the UI spinner to allow spinning up to the mipmap level found in the volume
                 // subtract 1 to go from range 0 to max
                 setMaxMipmapLevel(it.sac.spimSource.numMipmapLevels - 1)
-                it.setMipmapLevel(level)
+                it.setMipmapLevel(level.toInt())
             }
         }, c)
 

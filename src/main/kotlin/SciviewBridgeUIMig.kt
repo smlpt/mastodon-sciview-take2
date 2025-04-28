@@ -77,7 +77,7 @@ class SciviewBridgeUIMig(controlledBridge: SciviewBridge, populateThisContainer:
 
         // MIPMAP Level
         mipmapSpinner = addLabeledSpinner("Choose Mipmap Level", SpinnerNumberModel(0, 0, 6, 1)) { level ->
-            controlledBridge?.setMipmapLevel(level.toFloat())
+            controlledBridge?.setMipmapLevel(level.toInt())
         }
         controlledBridge?.let {
             setMaxMipmapLevel(it.spimSource.numMipmapLevels - 1)

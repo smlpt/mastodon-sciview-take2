@@ -110,7 +110,7 @@ class SciviewBridge: TimepointObserver {
     var uiFrame: JFrame? = null
     var isVRactive = false
 
-    lateinit var VRTracking: CellTrackingBase
+    var VRTracking: CellTrackingBase? = null
     private var adjacentEdges: MutableList<Link> = ArrayList()
     private var moveInstanceVRInit: (Vector3f) -> Unit
     private var moveInstanceVRDrag: (Vector3f) -> Unit
@@ -166,7 +166,8 @@ class SciviewBridge: TimepointObserver {
         //get necessary metadata - from image data
         this.sourceID = sourceID
         this.sourceResLevel = sourceResLevel
-        spimSource = mastodon.sharedBdvData.sources[this.sourceID].spimSource
+        sac = mastodon.sharedBdvData.sources[this.sourceID]
+        spimSource = sac.spimSource
 
         // number of pixels for each dimension at the highest res level
         val volumeDims = spimSource.getSource(0, 0).dimensionsAsLongArray()    // TODO rename to something more meaningful
@@ -180,9 +181,6 @@ class SciviewBridge: TimepointObserver {
         logger.info("downscale factors: ${volumeDownscale[0]} x, ${volumeDownscale[1]} x, ${volumeDownscale[2]} x")
         logger.info("number of mipmap levels: ${spimSource.numMipmapLevels}, available timepoints: ${mastodon.sharedBdvData.numTimepoints}")
 
-        // get 3D+t volume data from Mastodon
-        sac = mastodon.sharedBdvData.sources[this.sourceID]
-
         volumeNode = sciviewWin.addVolume(
             sac as SourceAndConverter<UnsignedShortType>,
             mastodon.sharedBdvData.numTimepoints,
@@ -190,7 +188,6 @@ class SciviewBridge: TimepointObserver {
             floatArrayOf(1f, 1f, 1f)
         )
         logger.info("current mipmap range: ${volumeNode.multiResolutionLevelLimits}")
-        setMipmapLevel(this.sourceResLevel.toFloat())
 
         setVolumeRanges(
             volumeNode,
@@ -291,23 +288,33 @@ class SciviewBridge: TimepointObserver {
         pluginActions = mastodon.plugins.pluginActions
         predictSpotsAction = pluginActions.actionMap.get("[elephant] predict spots")
         predictSpotsCallback = {
-            logger.info("Predicting spots...")
-            predictSpotsAction?.actionPerformed(ActionEvent(pluginActions, 0, null))
-            sphereLinkNodes.showInstancedSpots(detachedDPP_showsLastTimepoint.timepoint,
-                detachedDPP_showsLastTimepoint.colorizer)
+
+            predictSpotsAction?.let {
+                val start = TimeSource.Monotonic.markNow()
+                logger.info("Predicting spots for this timepoint...")
+                it.actionPerformed(ActionEvent(pluginActions, 0, null))
+                sphereLinkNodes.showInstancedSpots(detachedDPP_showsLastTimepoint.timepoint,
+                    detachedDPP_showsLastTimepoint.colorizer)
+                logger.info("Predicting spots took ${start.elapsedNow()} ms")
+            }
         }
+
         trainSpotsAction = pluginActions.actionMap.get("[elephant] train detection model (all timepoints)")
         trainsSpotsCallback = {
-            logger.info("Training spots from all timepoints...")
-            val start = TimeSource.Monotonic.markNow()
-            trainSpotsAction?.actionPerformed(ActionEvent(pluginActions, 0, null))
-            logger.info("Training spots took ${start.elapsedNow()} ms")
+            trainSpotsAction?.let {
+                val start = TimeSource.Monotonic.markNow()
+                logger.info("Training spots from all timepoints...")
+                it.actionPerformed(ActionEvent(pluginActions, 0, null))
+                logger.info("Training spots took ${start.elapsedNow()} ms")
+            }
         }
+
         neighborLinkingAction = pluginActions.actionMap.get("[elephant] nearest neighbor linking")
         neighborLinkingCallback = {
             logger.info("Linking nearest neighbors...")
             neighborLinkingAction?.actionPerformed(ActionEvent(pluginActions, 0, null))
         }
+
         stageSpotsCallback = {
             logger.info("Adding all spots to the true positiv tag set...")
             val tsModel = mastodon.model.tagSetModel
@@ -324,6 +331,10 @@ class SciviewBridge: TimepointObserver {
                     detachedDPP_showsLastTimepoint.colorizer)
             }
         }
+
+        setMipmapLevel(this.sourceResLevel)
+
+        openSyncedBDV()
 
         registerKeyboardHandlers()
     }
@@ -659,8 +670,8 @@ class SciviewBridge: TimepointObserver {
     }
 
     /** Sets the detail level of the volume node. */
-    fun setMipmapLevel(level: Float) {
-        volumeNode.multiResolutionLevelLimits = level.toInt() to level.toInt() + 1
+    fun setMipmapLevel(level: Int) {
+        volumeNode.multiResolutionLevelLimits = level to level + 1
     }
 
     val detachedDPP_withOwnTime: DPP_DetachedOwnTime
@@ -670,7 +681,7 @@ class SciviewBridge: TimepointObserver {
         // if we play backwards, start with the highest TP once we reach below 0, otherwise play forward and wrap at maxTP
         detachedDPP_withOwnTime.timepoint = if (timepoint < 0) maxTP else timepoint % maxTP
         updateSciviewContent(detachedDPP_withOwnTime)
-        VRTracking.volumeTPWidget.text = detachedDPP_withOwnTime.timepoint.toString()
+        VRTracking?.volumeTPWidget?.text = detachedDPP_withOwnTime.timepoint.toString()
     }
 
     private fun registerKeyboardHandlers() {
@@ -755,10 +766,10 @@ class SciviewBridge: TimepointObserver {
                     distance = cam.spatial().position.distance(selectedSpotInstance?.spatial()?.position)
                     currentHit = rayStart + rayDir * distance
                     val spot = sphereLinkNodes.findSpotFromInstance(selectedSpotInstance!!)
-                    mastodon.model.graph.vertexRef().refTo(spot).incomingEdges().forEach {
+                    mastodon.model.graph.vertexRef().refTo(spot).incomingEdges()?.forEach {
                         edges.add(it)
                     }
-                    mastodon.model.graph.vertexRef().refTo(spot).outgoingEdges().forEach {
+                    mastodon.model.graph.vertexRef().refTo(spot).outgoingEdges()?.forEach {
                         edges.add(it)
                     }
                 }
@@ -806,22 +817,22 @@ class SciviewBridge: TimepointObserver {
                 (VRTracking as EyeTracking).run()
             } else {
                 VRTracking = CellTrackingBase(sciviewWin)
-                VRTracking.run()
+                VRTracking?.run()
             }
 
             // Pass track and spot handling callbacks to sciview
-            VRTracking.trackCreationCallback = sphereLinkNodes.addTrackToMastodon
-            VRTracking.spotCreateDeleteCallback = sphereLinkNodes.addOrRemoveSpot
-            VRTracking.spotSelectionCallback = sphereLinkNodes.selectClosestSpotVR
+            VRTracking?.trackCreationCallback = sphereLinkNodes.addTrackToMastodon
+            VRTracking?.spotCreateDeleteCallback = sphereLinkNodes.addOrRemoveSpot
+            VRTracking?.spotSelectionCallback = sphereLinkNodes.selectClosestSpotVR
 //            VRTracking.spotDeletionCallback = sphereLinkNodes.deleteSelectedSpot
-            VRTracking.spotMoveInitCallback = moveInstanceVRInit
-            VRTracking.spotMoveDragCallback = moveInstanceVRDrag
-            VRTracking.spotMoveEndCallback = moveInstanceVREnd
-            VRTracking.spotLinkCallback = sphereLinkNodes.mergeSelectedToClosestSpot
-            VRTracking.singleLinkTrackedCallback = sphereLinkNodes.addTrackedPoint
-            VRTracking.toggleTrackingPreviewCallback = sphereLinkNodes.toggleLinkPreviews
+            VRTracking?.spotMoveInitCallback = moveInstanceVRInit
+            VRTracking?.spotMoveDragCallback = moveInstanceVRDrag
+            VRTracking?.spotMoveEndCallback = moveInstanceVREnd
+            VRTracking?.spotLinkCallback = sphereLinkNodes.mergeSelectedToClosestSpot
+            VRTracking?.singleLinkTrackedCallback = sphereLinkNodes.addTrackedPoint
+            VRTracking?.toggleTrackingPreviewCallback = sphereLinkNodes.toggleLinkPreviews
 //            VRTracking.resetTrackingCallback = resetControllerTrack
-            VRTracking.rebuildGeometryCallback = {
+            VRTracking?.rebuildGeometryCallback = {
                 logger.debug("Called rebuildGeometryCallback")
                 sphereLinkNodes.showInstancedSpots(
                     detachedDPP_showsLastTimepoint.timepoint,
@@ -832,14 +843,14 @@ class SciviewBridge: TimepointObserver {
                     detachedDPP_showsLastTimepoint.colorizer
                 )
             }
-            VRTracking.predictSpotsCallback = predictSpotsCallback
-            VRTracking.trainSpotsCallback = trainsSpotsCallback
-            VRTracking.trainFlowCallback = null
-            VRTracking.neighborLinkingCallback = neighborLinkingCallback
-            VRTracking.stageSpotsCallback = stageSpotsCallback
+            VRTracking?.predictSpotsCallback = predictSpotsCallback
+            VRTracking?.trainSpotsCallback = trainsSpotsCallback
+            VRTracking?.trainFlowCallback = null
+            VRTracking?.neighborLinkingCallback = neighborLinkingCallback
+            VRTracking?.stageSpotsCallback = stageSpotsCallback
 
             var timeSinceUndo = TimeSource.Monotonic.markNow()
-            VRTracking.mastodonUndoCallback = {
+            VRTracking?.mastodonUndoCallback = {
                 val now = TimeSource.Monotonic.markNow()
                 if (now.minus(timeSinceUndo) > 0.5.seconds) {
                     mastodon.model.undo()
@@ -851,19 +862,19 @@ class SciviewBridge: TimepointObserver {
 
             // register the bridge as an observer to the timepoint changes by the user in VR,
             // allowing us to get updates via the onTimepointChanged() function
-            VRTracking.registerObserver(this)
+            VRTracking?.registerObserver(this)
         }
     }
 
     /** Stop the VR session and clean up the scene. */
     fun stopVR() {
         isVRactive = false
-        VRTracking.unregisterObserver(this)
+        VRTracking?.unregisterObserver(this)
         logger.info("Removed timepoint observer from VR bindings.")
         if (associatedUI!!.eyeTrackingToggle.isSelected) {
             (VRTracking as EyeTracking).stop()
         } else {
-            VRTracking.stop()
+            VRTracking?.stop()
         }
 
         // ensure that the volume is visible again (could be turned invisible during the calibration)
