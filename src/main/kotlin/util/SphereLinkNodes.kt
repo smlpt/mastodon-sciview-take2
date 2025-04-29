@@ -178,7 +178,9 @@ class SphereLinkNodes(
         var index = 0
         logger.debug("we have ${spots.size()} spots in this Mastodon time point.")
         bridge.bdvNotifier?.lockUpdates = true
+        val vertexRef = mastodonData.model.graph.vertexRef()
         for (spot in spots) {
+            vertexRef.refTo(spot)
             // reuse a spot instance from the pool if the pool is large enough
             if (index < spotPool.size) {
                 inst = spotPool[index]
@@ -190,14 +192,19 @@ class SphereLinkNodes(
                 inst.parent = sphereParentNode
                 spotPool.add(inst)
             }
-            inst.name = "spot_${spot.internalPoolIndex}"
+            inst.name = "spot_${vertexRef.internalPoolIndex}"
             // get spot covariance and calculate the scaling and rotation from it
-            spot.localize(spotPosition)
+            vertexRef.localize(spotPosition)
             spot.getCovariance(covArray)
-            covariance = Array2DRowRealMatrix(covArray)
-            val (eigenvalues, eigenvectors) = computeEigen(covariance)
-            axisLengths = computeSemiAxes(eigenvalues)
+//            covariance = Array2DRowRealMatrix(covArray)
+//            val (eigenvalues, eigenvectors) = computeEigen(covariance)
 
+//            val avgScale = eigenvalues.average()
+//            axisLengths = computeSemiAxes(eigenvalues)
+
+            if (vertexRef.internalPoolIndex % 10 == 0) {
+                logger.debug("Spot ${vertexRef.internalPoolIndex} has radius ${sqrt(vertexRef.boundingSphereRadiusSquared)}")
+            }
             inst.spatial {
                 position = Vector3f(spotPosition)
                 scale = Vector3f(sphereScaleFactor *  sqrt(spot.boundingSphereRadiusSquared.toFloat()) / 10f)
@@ -208,9 +215,9 @@ class SphereLinkNodes(
 
 //            inst.drawEigenVectors(eigenvectors, axisLengths)
 
-            inst.setColorFromSpot(spot, colorizer)
+            inst.setColorFromSpot(vertexRef, colorizer)
             // highlight the spot currently selected in BDV
-            if (focusedSpotRef != null && focusedSpotRef.internalPoolIndex == spot.internalPoolIndex) {
+            if (focusedSpotRef != null && focusedSpotRef.internalPoolIndex == vertexRef.internalPoolIndex) {
                 inst.instancedProperties["Color"] = { Vector4f(1f, 0.25f, 0.25f, 1f) }
             }
 

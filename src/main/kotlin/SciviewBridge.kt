@@ -23,9 +23,14 @@ import net.imglib2.realtransform.AffineTransform3D
 import net.imglib2.type.numeric.IntegerType
 import net.imglib2.type.numeric.integer.UnsignedShortType
 import net.imglib2.view.Views
+import org.elephant.actions.NearestNeighborLinkingAction
+import org.elephant.actions.PredictSpotsAction
+import org.elephant.actions.TrainDetectionAction
 import org.joml.Matrix4f
 import org.joml.Quaternionf
 import org.joml.Vector3f
+import org.mastodon.adapter.TimepointModelAdapter
+import org.mastodon.app.MastodonAppModel
 import org.mastodon.mamut.model.Link
 import org.mastodon.mamut.model.Spot
 import org.mastodon.mamut.views.bdv.MamutViewBdv
@@ -189,6 +194,11 @@ class SciviewBridge: TimepointObserver {
         )
         logger.info("current mipmap range: ${volumeNode.multiResolutionLevelLimits}")
 
+        while (!volumeNode.volumeManager.readyToRender()) {
+            Thread.sleep(20)
+        }
+
+        setMipmapLevel(this.sourceResLevel)
         setVolumeRanges(
             volumeNode,
             "Grays.lut",
@@ -196,6 +206,7 @@ class SciviewBridge: TimepointObserver {
             intensity.rangeMin,
             intensity.rangeMax
         )
+
         // flip Z axis to align it with the synced BDV view
         volumeNode.spatial().scale *= Vector3f(1f, 1f, -1f)
 
@@ -286,16 +297,17 @@ class SciviewBridge: TimepointObserver {
 //        }
 
         pluginActions = mastodon.plugins.pluginActions
+
         predictSpotsAction = pluginActions.actionMap.get("[elephant] predict spots")
         predictSpotsCallback = {
-
             predictSpotsAction?.let {
                 val start = TimeSource.Monotonic.markNow()
                 logger.info("Predicting spots for this timepoint...")
-                it.actionPerformed(ActionEvent(pluginActions, 0, null))
+                (it as PredictSpotsAction).run()
                 sphereLinkNodes.showInstancedSpots(detachedDPP_showsLastTimepoint.timepoint,
                     detachedDPP_showsLastTimepoint.colorizer)
                 logger.info("Predicting spots took ${start.elapsedNow()} ms")
+                sciviewWin.camera?.showMessage("Prediction took ${start.elapsedNow()} ms", 2f, 0.2f, centered = true)
             }
         }
 
@@ -304,19 +316,23 @@ class SciviewBridge: TimepointObserver {
             trainSpotsAction?.let {
                 val start = TimeSource.Monotonic.markNow()
                 logger.info("Training spots from all timepoints...")
-                it.actionPerformed(ActionEvent(pluginActions, 0, null))
+                (it as TrainDetectionAction).run()
                 logger.info("Training spots took ${start.elapsedNow()} ms")
+                sciviewWin.camera?.showMessage("Training took ${start.elapsedNow()} ms", 2f, 0.2f, centered = true)
             }
         }
 
         neighborLinkingAction = pluginActions.actionMap.get("[elephant] nearest neighbor linking")
         neighborLinkingCallback = {
-            logger.info("Linking nearest neighbors...")
-            neighborLinkingAction?.actionPerformed(ActionEvent(pluginActions, 0, null))
+            neighborLinkingAction?.let {
+                logger.info("Linking nearest neighbors...")
+                (it as NearestNeighborLinkingAction).run()
+                sciviewWin.camera?.showMessage("Linked nearest neighbors.", 2f, 0.2f, centered = true)
+            }
         }
 
         stageSpotsCallback = {
-            logger.info("Adding all spots to the true positiv tag set...")
+            logger.info("Adding all spots to the true positive tag set...")
             val tsModel = mastodon.model.tagSetModel
             val detectionTS = tsModel.tagSetStructure.tagSets.find { it.name == "Detection" }
             val tpTag = detectionTS?.tags?.find { it.label() == "tp" }
@@ -331,8 +347,6 @@ class SciviewBridge: TimepointObserver {
                     detachedDPP_showsLastTimepoint.colorizer)
             }
         }
-
-        setMipmapLevel(this.sourceResLevel)
 
         openSyncedBDV()
 
@@ -811,6 +825,8 @@ class SciviewBridge: TimepointObserver {
      * depending on the user's selection in the UI. Sends spot and track manipulation callbacks to the VR environment. */
     fun launchVR(withEyetracking: Boolean = true) {
         isVRactive = true
+
+
         thread {
             if (withEyetracking) {
                 VRTracking = EyeTracking(sciviewWin)
