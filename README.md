@@ -32,7 +32,7 @@ where the timepoint defines the color of each link, or using the corresponding s
 
 The packaged version of manvr3d in the release section is only for testing purposes and not ready yet for day to day use. A list of known issues is listed below.
 
-Simply execute the `mastodon-sciview-bridge` batch file in the `bin` folder. At this time, we only support the Windows platform due to support of VR hardware.
+Simply execute the `manvr3d.bat` batch file in the `bin` folder. At this time, we only support the Windows platform due to support of VR hardware.
 After launch, a Mastodon and a Fiji window will open. From the Mastodon window, you can open existing projects or create new ones from your image dataset.
 
 With a project open, you can launch a new manvr3d instance by going to `Window > New manvr3d window`. This will open a sciview window, the GUI associated with it, a BigDataViewer (BDV) window that is linked to sciview and also an ELEPHANT control panel.
