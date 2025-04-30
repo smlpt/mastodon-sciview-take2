@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "org.mastodon"
-version = "0.9"
+version = "0.2"
 
 repositories {
     mavenCentral()
