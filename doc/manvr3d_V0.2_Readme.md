@@ -25,6 +25,8 @@ VR is currently only tested to work on Windows systems. To launch a VR session, 
 
 - Scene clean-up after closing a VR session is not complete. Camera behavior in the sciview window [switches to first person](https://github.com/scenerygraphics/sciview/issues/612) input instead of arcball control. This will be addressed in a future update.
 
+- Spot editing events can trigger a full graph redraw. This is not a problem for small to medium-sized datasets. ([↗](https://github.com/scenerygraphics/manvr3d/issues/23))
+
 - Spot scaling in sciview can be inconsistent with the spots rendered in BDV. This applies also to spots added by ELEPHANT (they tend to be too small) [↗](https://github.com/scenerygraphics/manvr3d/issues/22).
 
 - A freshly opened sciview window can have black borders in the bottom right area. This is caused by Windows scaling set to something other than 100%. Resizing the sciview window fixes it. [This issue](https://github.com/scenerygraphics/sciview/issues/553) will be addressed in a future update.
