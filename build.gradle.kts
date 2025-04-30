@@ -1,6 +1,9 @@
 plugins {
     kotlin("kapt") version "1.9.21"
     kotlin("jvm") version embeddedKotlinVersion
+    application
+    id("com.gradleup.shadow") version "8.3.6" apply false
+    java
 }
 
 group = "org.mastodon"
@@ -47,4 +50,16 @@ tasks.register("copyDependencies", Copy::class) {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+tasks {
+    if(project.properties["buildFatJAR"] == true) {
+        apply(plugin = "com.gradleup.shadow")
+        jar { isZip64 = true }
+    }
+}
+
+application {
+    mainClass = "org.mastodon.mamut.plugins.StartMastodon"
+    applicationDefaultJvmArgs = listOf("--add-opens=java.base/java.lang=ALL-UNNAMED")
 }
