@@ -1,4 +1,4 @@
-# Mastodon-sciview Bridge (take2)
+# manvr3d - Multimodal ANnotation in Virtual Reality/3D
 This is a reincarnation of [an earlier project `mastodon-sciview`](https://github.com/mastodon-sc/mastodon-sciview/) by [`xulman`](https://github.com/xulman) and [`RuoshanLan`](https://github.com/ruoshanlan).
 It aims to bridge [Mastodon](https://github.com/mastodon-sc) with interactive 3D visualization in [sciview (and scenery)](https://github.com/scenerygraphics/sciview)
 and extends it with [eye tracking](https://link.springer.com/chapter/10.1007/978-3-030-66415-2_18)-based cell tracking and other VR tracking/editing/exploration modalities.
@@ -91,4 +91,4 @@ Currently, the controller scheme looks something like this:
 ![controller_scheme.jpg](doc/controller_scheme.jpg)
 
 # How to compile and deploy
-[Please, refer to `doc/COMPILE.md`](doc/COMPILE.md)
+[Please refer to `doc/COMPILE.md`](doc/COMPILE.md)
