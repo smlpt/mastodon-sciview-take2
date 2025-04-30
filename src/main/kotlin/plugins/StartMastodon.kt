@@ -1,4 +1,4 @@
-package org.mastodon.mamut
+package org.mastodon.mamut.plugins
 
 import graphics.scenery.SceneryBase
 import graphics.scenery.utils.lazyLogger
